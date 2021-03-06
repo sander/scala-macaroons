@@ -11,19 +11,21 @@ object MacaroonSuite extends SimpleIOSuite {
 
   implicit def unsafeLogger[F[_]: Sync]: Logger[F] = Slf4jLogger.getLogger[F]
 
-  test("testing") {
+  test("serialization") {
     for {
-      s <- RootKey.stream.take(3).compile.toList
-      x <- IO(
+      keys <- RootKey.stream.take(2).compile.toList
+      x <- IO.pure(
         Capability
-          .create(s.head,
+          .create(keys.head,
                   Identifier("mid".getBytes),
-                  Some(Location(new URI("uri"))))
+                  Some(Location(new URI("http://example.com/"))))
           .attenuate(Identifier("caveat".getBytes))
           .attenuate(RootKey("key".getBytes),
                      Identifier("3p".getBytes),
                      Some(Location(new URI("3ploc")))))
       _ <- Logger[IO].info(s"cap: ${x.marshall().toBase64url}")
+      y <- IO.pure(MacaroonMarshalling.unmarshallMacaroon(x.marshall()))
+      _ <- Logger[IO].info(s"unmarshalled: $y")
     } yield expect(true)
   }
 }

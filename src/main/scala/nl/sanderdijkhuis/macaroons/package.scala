@@ -1,8 +1,7 @@
 package nl.sanderdijkhuis
 
-import cats._
 import cats.effect._
-import cats.implicits._
+import com.google.crypto.tink.subtle.XChaCha20Poly1305
 import fs2.Stream
 import io.estatico.newtype.macros.newtype
 import nl.sanderdijkhuis.macaroons.Capability.{
@@ -10,23 +9,16 @@ import nl.sanderdijkhuis.macaroons.Capability.{
   Marshalling,
   Seal
 }
-import tsec.cipher.symmetric.bouncy.BouncySecretKey
+import nl.sanderdijkhuis.macaroons.Varint.Offset
 import tsec.common._
-import tsec.mac.jca._
-import tsec.common._
-import tsec.cipher.symmetric._
-import cats.effect.IO
-import com.google.crypto.tink.{Aead, DeterministicAead, KeysetHandle}
-import com.google.crypto.tink.aead.{AeadConfig, XChaCha20Poly1305KeyManager}
-import com.google.crypto.tink.subtle.XChaCha20Poly1305
 
 import java.net.URI
 import java.security.MessageDigest
 import java.util.Base64
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
-import scala.util.chaining._
 import scala.annotation.tailrec
+import scala.util.chaining._
 
 package object macaroons {
 
@@ -47,6 +39,7 @@ package object macaroons {
 
   @newtype case class RootKey private (toByteArray: Array[Byte])
   object RootKey {
+
     def stream[F[_]: Sync]: Stream[F, RootKey] =
       for {
         m <- Stream.eval[F, ManagedRandom](Sync[F].delay(new ManagedRandom {}))
@@ -65,13 +58,13 @@ package object macaroons {
 
   implicit object MacaroonCryptography extends Cryptography[MacaroonV2] {
 
-    private def hmac(key: Array[Byte], message: Array[Byte]): Array[Byte] = {
-      val algorithm = "HmacSHA256"
-      val mac = Mac.getInstance(algorithm)
-      val spec = new SecretKeySpec(key, algorithm)
-      mac.init(spec)
-      mac.doFinal(message)
-    }
+    private val algorithm = "HmacSHA256"
+
+    private def hmac(key: Array[Byte], message: Array[Byte]): Array[Byte] =
+      Mac
+        .getInstance(algorithm)
+        .tap(_.init(new SecretKeySpec(key, algorithm)))
+        .doFinal(message)
 
     override def authenticate(
         key: RootKey,
@@ -111,43 +104,44 @@ package object macaroons {
   }
 
   // https://github.com/rescrv/libmacaroons/blob/master/doc/format.txt
-  implicit object Marshalling extends Marshalling[MacaroonV2] {
+  implicit object MacaroonMarshalling extends Marshalling[MacaroonV2] {
 
-    private def marshall(caveat: Caveat): List[String] =
-      List(caveat.identifier.toString) ++ caveat.maybeVerificationKeyId.toList
-        .map(vid => s"vid $vid") ++ caveat.maybeLocation.toList
-        .map(loc => s"location $loc")
+    private val endOfSection = Array(0.toByte)
+    private val endOfSectionTag = 0
+    private val locationTag = 1
+    private val identifierTag = 2
+    private val verificationIdTag = 4
+    private val signatureTag = 6
 
-    private def version = Array(2.toByte)
+    private val versionNumber = 2
+    private val version = Array(versionNumber.toByte)
 
     private def field(fieldType: Int, content: Array[Byte]): Array[Byte] =
       Varint.encode(fieldType) ++ Varint.encode(content.length) ++ content
 
     private def optionalLocation(macaroon: Capability[MacaroonV2]) =
       macaroon.maybeLocation.toList
-        .flatMap(loc => field(1, loc.toURI.toString.getBytes))
+        .flatMap(loc => field(locationTag, loc.toURI.toString.getBytes))
         .toArray
 
     private def optionalLocation(caveat: Caveat) =
       caveat.maybeLocation.toList
-        .flatMap(loc => field(1, loc.toURI.toString.getBytes))
+        .flatMap(loc => field(locationTag, loc.toURI.toString.getBytes))
         .toArray
 
     private def optionalVerificationKeyId(caveat: Caveat) =
       caveat.maybeVerificationKeyId.toList
-        .flatMap(vid => field(4, vid.toByteArray))
+        .flatMap(vid => field(verificationIdTag, vid.toByteArray))
         .toArray
 
     private def identifier(macaroon: Capability[MacaroonV2]) =
-      field(2, macaroon.identifier.toByteArray)
+      field(identifierTag, macaroon.identifier.toByteArray)
 
     private def identifier(caveat: Caveat) =
-      field(2, caveat.identifier.toByteArray)
-
-    private def endOfSection = Array(0.toByte)
+      field(identifierTag, caveat.identifier.toByteArray)
 
     private def signature(macaroon: Capability[MacaroonV2]) =
-      field(6, macaroon.authentication.toByteArray)
+      field(signatureTag, macaroon.authentication.toByteArray)
 
     private def caveats(macaroon: Capability[MacaroonV2]) =
       macaroon.caveats.reverse
@@ -159,19 +153,68 @@ package object macaroons {
       MacaroonV2(
         version ++ optionalLocation(macaroon) ++ identifier(macaroon) ++ endOfSection ++ caveats(
           macaroon) ++ endOfSection ++ signature(macaroon))
-//        (List("2") ++ macaroon.maybeLocation.toList
-//          .map(loc => s"location $loc") ++ List(
-//          s"identifier ${macaroon.identifier}") ++ macaroon.caveats
-//          .flatMap(marshall))
-//          .mkString("\n")
-//          .getBytes
-//          .pipe(MacaroonV2(_))
 
     override def marshall(bound: Capability.Bound[MacaroonV2]): MacaroonV2 =
       ???
 
     override def unmarshallMacaroon(
-        value: MacaroonV2): Option[Capability[MacaroonV2]] = ???
+        value: MacaroonV2): Option[Capability[MacaroonV2]] = {
+
+      case class Tag(toInt: Int)
+      case class Length(toInt: Int)
+      case class Value(toByteArray: Array[Byte])
+
+      def readTagLengthValueOrEndOfSection(
+          in: Array[Byte],
+          offset: Offset): Option[(Tag, Value, Offset)] = {
+        for {
+          (tag, offset) <- Varint.decodeToInt(in, offset)
+          _ <- Option.when(tag != endOfSectionTag)(())
+          (length, offset) <- Varint.decodeToInt(in, offset)
+          end = offset.toInt + length
+          value <- Option.when(end <= in.length)(in.slice(offset.toInt, end))
+        } yield (Tag(tag), Value(value), Offset(end))
+      }
+
+      def parse(in: Array[Byte]): Option[Capability[MacaroonV2]] =
+        for {
+          _ <- in.headOption.map(_.toInt).filter(_ == versionNumber)
+          (tag, value, offset) <- readTagLengthValueOrEndOfSection(
+            in,
+            Varint.Offset(1))
+          location <- tag match {
+            case Tag(t) if t == locationTag =>
+              Some(Some(Location(new URI(new String(value.toByteArray)))))
+            case _ => Some(None)
+          }
+          (id, offset) <- location match {
+            case Some(_) =>
+              readTagLengthValueOrEndOfSection(in, offset).collect {
+                case (t, v, o) if t == Tag(identifierTag) =>
+                  (Identifier(v.toByteArray), o)
+              }
+            case None => Some((Identifier(value.toByteArray), offset))
+          }
+          offset <- Option.when(
+            in.length > offset.toInt && in(offset.toInt) == endOfSectionTag)(
+            Offset(offset.toInt + 1))
+        } yield
+          Capability[MacaroonV2](location,
+                                 id,
+                                 List.empty,
+                                 AuthenticationTag(Array.empty))(
+            MacaroonCryptography,
+            MacaroonMarshalling)
+
+      val s = Stream(value.toByteArray: _*)
+
+//      val x = for {
+//        v <- s.head if v == versionNumber.toByte
+//        r <- s.tail.through(x => x.take(3))
+//      } yield ()
+
+      parse(value.toByteArray)
+    }
 
     override def unmarshallBound(
         value: MacaroonV2): Option[Capability.Bound[MacaroonV2]] = ???

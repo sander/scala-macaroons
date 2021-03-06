@@ -3,7 +3,6 @@ version := "0.1.0-SNAPSHOT"
 scalaVersion := "2.13.5"
 
 libraryDependencies ++= Seq(
-  "com.github.nitram509" % "jmacaroons" % "0.4.1",
   "org.typelevel" %% "cats-effect" % "2.3.1",
   "io.github.jmcardon" %% "tsec-common" % "0.2.1",
   "io.github.jmcardon" %% "tsec-mac" % "0.2.1",

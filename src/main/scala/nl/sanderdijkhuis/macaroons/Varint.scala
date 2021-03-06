@@ -50,7 +50,9 @@ object Varint {
       if (index >= bytes.length)
         None
       else if ((bytes(index) & 0x80) == 0)
-        Some((acc | (bytes(index) << shift), Offset(index + 1 - offset.toInt)))
+        Some(
+          (acc | (bytes(index) << shift),
+           Offset(index + 1 /*- offset.toInt*/ )))
       else
         rec(index + 1, shift + 7, acc | ((bytes(index) & 0x7F) << shift))
 
