@@ -5,7 +5,7 @@ import cats.effect._
 import cats.implicits._
 import fs2.Stream
 import io.estatico.newtype.macros.newtype
-import nl.sanderdijkhuis.macaroons4s.Capability.{
+import nl.sanderdijkhuis.macaroons.Capability.{
   AuthenticationTag,
   Marshalling,
   Seal
@@ -28,7 +28,7 @@ import javax.crypto.spec.SecretKeySpec
 import scala.util.chaining._
 import scala.annotation.tailrec
 
-package object macaroons4s {
+package object macaroons {
 
   @newtype case class Location(toURI: URI) {
 

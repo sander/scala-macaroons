@@ -1,6 +1,6 @@
-package nl.sanderdijkhuis.macaroons4s
+package nl.sanderdijkhuis.macaroons
 
-import nl.sanderdijkhuis.macaroons4s.Capability.{AuthenticationTag, Seal}
+import nl.sanderdijkhuis.macaroons.Capability.{AuthenticationTag, Seal}
 
 trait Cryptography[C] {
 

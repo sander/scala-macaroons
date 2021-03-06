@@ -1,4 +1,4 @@
-package nl.sanderdijkhuis.macaroons4s
+package nl.sanderdijkhuis.macaroons
 
 import cats.{MonadError, Monoid}
 import cats.data._

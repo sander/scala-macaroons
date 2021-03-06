@@ -1,4 +1,4 @@
-package nl.sanderdijkhuis.macaroons4s
+package nl.sanderdijkhuis.macaroons
 
 import weaver._
 import cats.effect._
