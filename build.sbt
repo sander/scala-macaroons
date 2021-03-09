@@ -12,6 +12,9 @@ libraryDependencies ++= Seq(
   "org.slf4j" % "slf4j-simple" % "1.7.30",
   "co.fs2" %% "fs2-core" % "2.5.0",
   "io.estatico" %% "newtype" % "0.4.4",
+  "org.scodec" %% "scodec-bits" % "1.1.24",
+  "org.scodec" %% "scodec-core" % "1.11.7",
+  "org.scodec" %% "scodec-cats" % "1.1.0-RC1",
   "com.disneystreaming" %% "weaver-cats" % "0.6.0-M6" % Test
 )
 

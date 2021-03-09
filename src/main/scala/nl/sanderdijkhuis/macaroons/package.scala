@@ -22,17 +22,19 @@ import scala.util.chaining._
 
 package object macaroons {
 
-  @newtype case class Location(toURI: URI) {
+  sealed trait Field
+
+  case class Location(toURI: URI) extends Field {
 
     override def toString: String = toURI.toString
   }
 
-  @newtype case class Identifier(toByteArray: Array[Byte]) {
+  case class Identifier(toByteArray: Array[Byte]) extends Field {
 
     override def toString: String = new String(toByteArray)
   }
 
-  @newtype case class VerificationKeyId(toByteArray: Array[Byte]) {
+  case class VerificationKeyId(toByteArray: Array[Byte]) extends Field {
 
     override def toString: String = new String(toByteArray)
   }
