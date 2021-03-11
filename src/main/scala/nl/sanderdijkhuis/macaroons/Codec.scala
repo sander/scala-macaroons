@@ -1,6 +1,5 @@
 package nl.sanderdijkhuis.macaroons
 
-import io.estatico.newtype.macros.newtype
 import scodec.Attempt.Successful
 import scodec._
 import scodec.bits._
@@ -10,11 +9,6 @@ import scodec.codecs._
   * @see [[https://github.com/rescrv/libmacaroons/blob/master/doc/format.txt]]
   */
 object Codec {
-
-  @newtype case class Location(value: String)
-  @newtype case class Identifier(toByteVector: ByteVector)
-  @newtype case class VerificationKeyId(toByteVector: ByteVector)
-  @newtype case class AuthenticationTag(toByteVector: ByteVector)
 
   case class Caveat(maybeLocation: Option[Location],
                     identifier: Identifier,

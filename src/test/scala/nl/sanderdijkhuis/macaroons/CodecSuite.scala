@@ -1,21 +1,15 @@
 package nl.sanderdijkhuis.macaroons
 
-import weaver._
-import scodec._
+import nl.sanderdijkhuis.macaroons
 import scodec.bits._
 import scodec.codecs._
-import shapeless._
-import io.estatico.newtype.macros.newtype
-import nl.sanderdijkhuis.macaroons
-import scodec.Attempt.Successful
-
-import java.net.URI
+import weaver._
 
 object CodecSuite extends SimpleIOSuite {
 
   pureTest("foo") {
     println(s"mac: ${macaroons.Codec.macaroon.encode(macaroons.Codec
-      .Macaroon(None, macaroons.Codec.Identifier(hex"aa"), Vector.empty, macaroons.Codec.AuthenticationTag(hex"bb")))}")
+      .Macaroon(None, Identifier(hex"aa"), Vector.empty, AuthenticationTag(hex"bb")))}")
 
     println(
       optional(lookahead(constant(hex"01")), bytes).decode(hex"0111".bits))

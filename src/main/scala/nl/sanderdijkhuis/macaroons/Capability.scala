@@ -1,17 +1,15 @@
 package nl.sanderdijkhuis.macaroons
 
 import cats.Monoid
-import io.estatico.newtype.macros.newtype
 
 case class Capability[C] private (maybeLocation: Option[Location],
                                   identifier: Identifier,
                                   caveats: List[Caveat],
-                                  authentication: Capability.AuthenticationTag)(
+                                  authentication: AuthenticationTag)(
     implicit cryptography: Cryptography[C],
     marshalling: Capability.Marshalling[C]) {
 
-  private def bindForRequest(
-      authentication: Capability.AuthenticationTag): Capability.Seal =
+  private def bindForRequest(authentication: AuthenticationTag): Seal =
     cryptography.bind(authentication, this.authentication)
 
   private def addCaveatHelper(identifier: Identifier,
@@ -52,7 +50,7 @@ case class Capability[C] private (maybeLocation: Option[Location],
       // use takeWhile to abort early?
       val maybeAuthentication =
         caveats
-          .foldLeft[Option[Capability.AuthenticationTag]](Some(initialCSig)) {
+          .foldLeft[Option[AuthenticationTag]](Some(initialCSig)) {
             case (Some(cSig), caveat) => {
               val caveatsVerified = caveat.maybeVerificationKeyId
                 .map(
@@ -100,12 +98,6 @@ object Capability {
     def from[C](macaroon: Capability[C], seal: Seal): Bound[C] =
       Bound(macaroon.maybeLocation, macaroon.identifier, macaroon.caveats, seal)
   }
-
-  @newtype case class AuthenticationTag(toByteArray: Array[Byte])
-
-  @newtype case class Seal(toByteArray: Array[Byte])
-
-  @newtype case class Key(toByteArray: Array[Byte])
 
   trait Marshalling[C] {
     def marshall(macaroon: Capability[C]): C

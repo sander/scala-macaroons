@@ -1,7 +1,5 @@
 package nl.sanderdijkhuis.macaroons
 
-import nl.sanderdijkhuis.macaroons.Capability.{AuthenticationTag, Seal}
-
 trait Cryptography[C] {
 
   def authenticate(key: RootKey, identifier: Identifier): AuthenticationTag
