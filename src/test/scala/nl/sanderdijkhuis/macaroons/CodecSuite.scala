@@ -9,7 +9,7 @@ object CodecSuite extends SimpleIOSuite {
 
   pureTest("foo") {
     println(s"mac: ${macaroons.Codec.macaroon.encode(macaroons.Codec
-      .Macaroon(None, Identifier(hex"aa"), Vector.empty, AuthenticationTag(hex"bb")))}")
+      .Macaroon(None, Identifier(hex"aa"), Vector.empty, Authentication(hex"bb")))}")
 
     println(
       optional(lookahead(constant(hex"01")), bytes).decode(hex"0111".bits))

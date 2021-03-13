@@ -1,18 +1,17 @@
 package nl.sanderdijkhuis.macaroons
 
-trait Cryptography[C] {
+trait Cryptography {
 
-  def authenticate(key: RootKey, identifier: Identifier): AuthenticationTag
+  def authenticate(key: Key, identifier: Identifier): Authentication
 
-  def authenticate(authentication: AuthenticationTag,
-                   maybeVerificationKeyId: Option[VerificationKeyId],
-                   identifier: Identifier): AuthenticationTag
+  def authenticate(authentication: Authentication,
+                   maybeChallenge: Option[Challenge],
+                   identifier: Identifier): Authentication
 
-  def encrypt(authentication: AuthenticationTag,
-              rootKey: RootKey): VerificationKeyId
+  def encrypt(authentication: Authentication, rootKey: Key): Challenge
 
-  def decrypt(authentication: AuthenticationTag,
-              verificationKeyId: VerificationKeyId): RootKey
+  def decrypt(authentication: Authentication, challenge: Challenge): Key
 
-  def bind(discharging: AuthenticationTag, authorizing: AuthenticationTag): Seal
+  def bind(discharging: Authentication,
+           authorizing: Authentication): Authentication
 }

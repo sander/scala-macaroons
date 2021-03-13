@@ -4,20 +4,12 @@ import scodec.Attempt.Successful
 import scodec._
 import scodec.bits._
 import scodec.codecs._
+import shapeless._
 
 /**
   * @see [[https://github.com/rescrv/libmacaroons/blob/master/doc/format.txt]]
   */
 object Codec {
-
-  case class Caveat(maybeLocation: Option[Location],
-                    identifier: Identifier,
-                    maybeVerificationKeyId: Option[VerificationKeyId])
-
-  case class Macaroon(maybeLocation: Option[Location],
-                      identifier: Identifier,
-                      caveats: Vector[Caveat],
-                      authenticationTag: AuthenticationTag)
 
   private val version: Codec[Unit] = constant(hex"02")
   private val endOfSectionBytes: ByteVector = hex"00"
@@ -29,13 +21,11 @@ object Codec {
                                        loc => Successful(loc.toString)))
   private val identifier: Codec[Identifier] =
     requiredField(2, bytes.xmap[Identifier](Identifier.apply, _.toByteVector))
-  private val optionalVerificationKeyId: Codec[Option[VerificationKeyId]] =
-    optionalField(
-      4,
-      bytes.xmap[VerificationKeyId](VerificationKeyId.apply, _.toByteVector))
-  private val authenticationTag: Codec[AuthenticationTag] = requiredField(
+  private val optionalVerificationKeyId: Codec[Option[Challenge]] =
+    optionalField(4, bytes.xmap[Challenge](Challenge.apply, _.toByteVector))
+  private val authenticationTag: Codec[Authentication] = requiredField(
     6,
-    bytes.xmap[AuthenticationTag](AuthenticationTag.apply, _.toByteVector))
+    bytes.xmap[Authentication](Authentication.apply, _.toByteVector))
 
   private val caveat: Codec[Caveat] =
     (optionalLocation :: identifier :: optionalVerificationKeyId)
@@ -43,9 +33,18 @@ object Codec {
   private val caveats: Codec[Vector[Caveat]] =
     vectorDelimited(endOfSectionBytes.bits, caveat)
 
-  val macaroon: Codec[Macaroon] =
-    (version ~> optionalLocation :: identifier :: caveats :: endOfSection :: authenticationTag)
-      .as[Macaroon]
+  private def genericToCaseClass(h: Option[Location] :: Identifier :: Vector[
+    Caveat] :: Authentication :: HNil) =
+    Macaroon[Unbound](h.head,
+                      h.tail.head,
+                      h.tail.tail.head,
+                      h.tail.tail.tail.head)
+  private def caseClassToGeneric(m: Macaroon[Unbound]) =
+    m.maybeLocation :: m.identifier :: m.caveats :: m.authentication :: HNil
+
+  val macaroon: Codec[Macaroon[Unbound]] =
+    (version ~> optionalLocation :: identifier :: endOfSection ~> caveats :: endOfSection ~> authenticationTag)
+      .xmap(genericToCaseClass, caseClassToGeneric)
 
   private def tag(tagInt: Int): Codec[Unit] =
     "tag" | constant(vlong.encode(tagInt).require)

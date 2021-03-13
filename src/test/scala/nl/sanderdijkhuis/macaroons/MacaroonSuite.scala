@@ -13,7 +13,7 @@ object MacaroonSuite extends SimpleIOSuite {
 
   test("serialization") {
     for {
-      keys <- RootKey.stream.take(2).compile.toList
+      keys <- Key.stream.take(2).compile.toList
 //      x <- IO.pure(
 //        Capability
 //          .create(keys.head,

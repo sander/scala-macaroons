@@ -1,5 +1,6 @@
 package nl.sanderdijkhuis
 
+import cats.Monoid
 import cats.effect.Sync
 import cats.implicits._
 import fs2.Stream
@@ -12,9 +13,13 @@ import scala.util.chaining._
 
 package object macaroons {
 
-  @newtype case class AuthenticationTag(toByteVector: ByteVector)
+  sealed trait MacaroonState
+  trait Unbound extends MacaroonState
+  trait Discharge extends MacaroonState
 
-  @newtype case class Seal(toByteVector: ByteVector)
+  @newtype case class Authentication(toByteVector: ByteVector)
+
+  @newtype case class Seal(toAuthenticationTag: Authentication)
 
   @newtype case class Identifier private (toByteVector: ByteVector)
   object Identifier {
@@ -22,18 +27,17 @@ package object macaroons {
     def from(value: ByteVector): Option[Identifier] = Some(Identifier(value))
   }
 
-  // TODO rename to challenge?
-  @newtype case class VerificationKeyId private (toByteVector: ByteVector)
-  object VerificationKeyId {
+  @newtype case class Challenge private (toByteVector: ByteVector)
+  object Challenge {
 
-    def from(value: ByteVector): Option[VerificationKeyId] =
-      Some(VerificationKeyId(value))
+    def from(value: ByteVector): Option[Challenge] =
+      Some(Challenge(value))
   }
 
-  @newtype case class RootKey private (toByteVector: ByteVector)
-  object RootKey {
+  @newtype case class Key private (toByteVector: ByteVector)
+  object Key {
 
-    def stream[F[_]: Sync]: Stream[F, RootKey] =
+    def stream[F[_]: Sync]: Stream[F, Key] =
       for {
         m <- Stream.eval[F, ManagedRandom](Sync[F].delay(new ManagedRandom {}))
         k <- Stream
@@ -42,24 +46,40 @@ package object macaroons {
               .delay(new Array[Byte](32).tap(m.nextBytes))
               .map(ByteVector(_)))
           .repeat
-      } yield RootKey(k)
+      } yield Key(k)
   }
 
-  @newtype case class Location private (value: String) {
-
-    override def toString: String = value
-  }
+  @newtype case class Location private (value: String)
   object Location {
 
     def from(value: String): Option[Location] = Some(Location(value))
   }
 
-  // TODO used?
-  @newtype case class Key(toByteVector: ByteVector)
-
-  @newtype case class MacaroonV2(toByteVector: ByteVector) {
+  @newtype case class SerializedMacaroon(toByteVector: ByteVector) {
 
     def toBase64url: String =
       Base64.getUrlEncoder.withoutPadding.encodeToString(toByteVector.toArray)
+  }
+
+  sealed trait VerificationResult {
+    def ||(v: => VerificationResult): VerificationResult
+    def isVerified: Boolean
+  }
+  case object Verified extends VerificationResult {
+    override def ||(v: => VerificationResult): VerificationResult = Verified
+
+    override def isVerified: Boolean = true
+  }
+  case object VerificationFailed extends VerificationResult {
+    override def ||(v: => VerificationResult): VerificationResult = v
+
+    override def isVerified: Boolean = false
+  }
+
+  type Verifier = Identifier => VerificationResult
+
+  implicit object VerifierMonoid extends Monoid[Verifier] {
+    override def empty: Verifier = _ => VerificationFailed
+    override def combine(x: Verifier, y: Verifier): Verifier = c => x(c) || y(c)
   }
 }

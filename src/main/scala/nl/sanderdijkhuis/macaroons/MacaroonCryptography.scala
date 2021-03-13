@@ -8,7 +8,7 @@ import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import scala.util.chaining._
 
-object MacaroonCryptography extends Cryptography[MacaroonV2] {
+object MacaroonCryptography extends Cryptography[SerializedMacaroon] {
 
   private val algorithm = "HmacSHA256"
 
@@ -19,31 +19,29 @@ object MacaroonCryptography extends Cryptography[MacaroonV2] {
       .doFinal(message.toArray)
       .pipe(ByteVector(_))
 
-  override def authenticate(key: RootKey,
-                            identifier: Identifier): AuthenticationTag =
-    AuthenticationTag(hmac(key.toByteVector, identifier.toByteVector))
+  override def authenticate(key: Key, identifier: Identifier): Authentication =
+    Authentication(hmac(key.toByteVector, identifier.toByteVector))
 
-  override def authenticate(authentication: AuthenticationTag,
-                            maybeVerificationKeyId: Option[VerificationKeyId],
-                            identifier: Identifier): AuthenticationTag =
-    AuthenticationTag(
+  override def authenticate(authentication: Authentication,
+                            maybeChallenge: Option[Challenge],
+                            identifier: Identifier): Authentication =
+    Authentication(
       hmac(authentication.toByteVector,
-           maybeVerificationKeyId
+           maybeChallenge
              .map(_.toByteVector)
              .getOrElse(ByteVector.empty) ++ identifier.toByteVector))
 
-  override def encrypt(
-      authentication: AuthenticationTag,
-      rootKey: RootKey /* TODO differently? */ ): VerificationKeyId =
+  override def encrypt(authentication: Authentication,
+                       rootKey: Key /* TODO differently? */ ): Challenge =
     new XChaCha20Poly1305(authentication.toByteVector.toArray)
       .encrypt(rootKey.toByteVector.toArray, Array.empty)
-      .pipe(b => VerificationKeyId(ByteVector(b)))
+      .pipe(b => Challenge(ByteVector(b)))
 
-  override def decrypt(authentication: AuthenticationTag,
-                       verificationKeyId: VerificationKeyId): RootKey =
+  override def decrypt(authentication: Authentication,
+                       challenge: Challenge): Key =
     new XChaCha20Poly1305(authentication.toByteVector.toArray)
-      .decrypt(verificationKeyId.toByteVector.toArray, Array.empty)
-      .pipe(b => RootKey(ByteVector(b)))
+      .decrypt(challenge.toByteVector.toArray, Array.empty)
+      .pipe(b => Key(ByteVector(b)))
 
   private def hash(value: ByteVector): ByteVector =
     MessageDigest
@@ -51,7 +49,7 @@ object MacaroonCryptography extends Cryptography[MacaroonV2] {
       .digest(value.toArray)
       .pipe(ByteVector(_))
 
-  override def bind(discharging: AuthenticationTag,
-                    authorizing: AuthenticationTag): Seal =
+  override def bind(discharging: Authentication,
+                    authorizing: Authentication): Seal =
     hash(discharging.toByteVector ++ authorizing.toByteVector).pipe(Seal.apply)
 }
