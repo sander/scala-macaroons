@@ -20,4 +20,9 @@ libraryDependencies ++= Seq(
 
 testFrameworks += new TestFramework("weaver.framework.CatsEffect")
 
-scalacOptions += "-Ymacro-annotations"
+scalacOptions ++= Seq("-Ymacro-annotations",
+                      "-Xsource:3",
+                      "-Werror",
+                      "-Wunused:privates",
+                      "-feature",
+                      "-deprecation")

@@ -8,23 +8,22 @@ import io.estatico.newtype.macros.newtype
 import scodec.bits.ByteVector
 import tsec.common.ManagedRandom
 
-import java.util.Base64
 import scala.util.chaining._
+import scala.language.implicitConversions
 
 package object macaroons {
 
-  sealed trait MacaroonState
-  trait Unbound extends MacaroonState
-  trait Discharge extends MacaroonState
+  trait Authority
 
   @newtype case class Authentication(toByteVector: ByteVector)
 
-  @newtype case class Seal(toAuthenticationTag: Authentication)
-
-  @newtype case class Identifier private (toByteVector: ByteVector)
+  @newtype final case class Identifier private (toByteVector: ByteVector)
   object Identifier {
 
     def from(value: ByteVector): Option[Identifier] = Some(Identifier(value))
+
+    def from(value: String): Option[Identifier] =
+      ByteVector.encodeUtf8(value).toOption.flatMap(from)
   }
 
   @newtype case class Challenge private (toByteVector: ByteVector)
@@ -47,18 +46,14 @@ package object macaroons {
               .map(ByteVector(_)))
           .repeat
       } yield Key(k)
+
+    def from(value: ByteVector): Option[Key] = Some(Key(value))
   }
 
   @newtype case class Location private (value: String)
   object Location {
 
     def from(value: String): Option[Location] = Some(Location(value))
-  }
-
-  @newtype case class SerializedMacaroon(toByteVector: ByteVector) {
-
-    def toBase64url: String =
-      Base64.getUrlEncoder.withoutPadding.encodeToString(toByteVector.toArray)
   }
 
   sealed trait VerificationResult {

@@ -4,12 +4,8 @@ import scodec.Attempt.Successful
 import scodec._
 import scodec.bits._
 import scodec.codecs._
-import shapeless._
 
-/**
-  * @see [[https://github.com/rescrv/libmacaroons/blob/master/doc/format.txt]]
-  */
-object Codec {
+package object codecs {
 
   private val version: Codec[Unit] = constant(hex"02")
   private val endOfSectionBytes: ByteVector = hex"00"
@@ -33,18 +29,12 @@ object Codec {
   private val caveats: Codec[Vector[Caveat]] =
     vectorDelimited(endOfSectionBytes.bits, caveat)
 
-  private def genericToCaseClass(h: Option[Location] :: Identifier :: Vector[
-    Caveat] :: Authentication :: HNil) =
-    Macaroon[Unbound](h.head,
-                      h.tail.head,
-                      h.tail.tail.head,
-                      h.tail.tail.tail.head)
-  private def caseClassToGeneric(m: Macaroon[Unbound]) =
-    m.maybeLocation :: m.identifier :: m.caveats :: m.authentication :: HNil
-
-  val macaroon: Codec[Macaroon[Unbound]] =
+  /**
+    * @see [[https://github.com/rescrv/libmacaroons/blob/master/doc/format.txt]]
+    */
+  val macaroonV2: Codec[Macaroon] =
     (version ~> optionalLocation :: identifier :: endOfSection ~> caveats :: endOfSection ~> authenticationTag)
-      .xmap(genericToCaseClass, caseClassToGeneric)
+      .as[Macaroon]
 
   private def tag(tagInt: Int): Codec[Unit] =
     "tag" | constant(vlong.encode(tagInt).require)
