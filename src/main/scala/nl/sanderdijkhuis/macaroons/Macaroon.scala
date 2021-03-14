@@ -10,7 +10,7 @@ case class Macaroon(maybeLocation: Option[Location],
 
 object Macaroon {
 
-  def create[F[_]](key: Key,
+  def create[F[_]](key: RootKey,
                    identifier: Identifier,
                    maybeLocation: Option[Location])(
       implicit cryptography: Cryptography[F]): Macaroon with Authority =
@@ -51,21 +51,22 @@ object Macaroon {
                    d.caveats,
                    bindForRequest(d.authentication)))
 
-    def attenuate(identifier: Identifier)(
+    def addFirstPartyCaveat(identifier: Identifier)(
         implicit cryptography: Cryptography[F]): Macaroon with Authority =
       addCaveatHelper(identifier, None, None)
 
-    def attenuate(key: Key,
-                  identifier: Identifier,
-                  maybeLocation: Option[Location])(
+    def addThirdPartyCaveat(key: RootKey,
+                            identifier: Identifier,
+                            maybeLocation: Option[Location])(
         implicit cryptography: Cryptography[F]): F[Macaroon with Authority] =
       cryptography
         .encrypt(macaroon.authentication, key)
         .map(c => addCaveatHelper(identifier, Some(c), maybeLocation))
 
-    def verify(key: Key, verifier: Verifier, Ms: Set[Macaroon])(
+    def verify(key: RootKey, verifier: Verifier, Ms: Set[Macaroon])(
         implicit cryptography: Cryptography[F]): VerificationResult = {
-      def helper(discharge: Option[Macaroon], k: Key): VerificationResult = {
+      def helper(discharge: Option[Macaroon],
+                 k: RootKey): VerificationResult = {
         val M = discharge.getOrElse(macaroon)
         val cSig = cryptography.authenticate(k, M.identifier)
         val maybeAuthentication =

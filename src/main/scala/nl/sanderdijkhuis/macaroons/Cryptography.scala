@@ -22,15 +22,16 @@ import scala.util.chaining._
 
 trait Cryptography[F[_]] {
 
-  def authenticate(key: Key, identifier: Identifier): Authentication
+  def authenticate(key: RootKey, identifier: Identifier): Authentication
 
   def authenticate(authentication: Authentication,
                    maybeChallenge: Option[Challenge],
                    identifier: Identifier): Authentication
 
-  def encrypt(authentication: Authentication, rootKey: Key): F[Challenge]
+  def encrypt(authentication: Authentication, rootKey: RootKey): F[Challenge]
 
-  def decrypt(authentication: Authentication, challenge: Challenge): Option[Key]
+  def decrypt(authentication: Authentication,
+              challenge: Challenge): Option[RootKey]
 
   def bind(discharging: Authentication,
            authorizing: Authentication): Authentication
@@ -46,7 +47,7 @@ object Cryptography {
 
       private val algorithm = "HmacSHA256"
 
-      override def authenticate(key: Key,
+      override def authenticate(key: RootKey,
                                 identifier: Identifier): Authentication =
         Authentication(hmac(key.toByteVector, identifier.toByteVector))
 
@@ -61,10 +62,10 @@ object Cryptography {
 
       // TODO: might make deterministic sometime: [[https://eprint.iacr.org/2020/067]]
       override def encrypt(authentication: Authentication,
-                           key: Key): F[Challenge] = {
+                           key: RootKey): F[Challenge] = {
 
         implicit val counterStrategy: IvGen[F, XSalsa20Poly1305] =
-          XSalsa20Poly1305.defaultIvGen[F]
+          XSalsa20Poly1305.defaultIvGen[F] // TODO use ChaCha instead, newer
         implicit val cachedInstance
           : AuthEncryptor[F, XSalsa20Poly1305, BouncySecretKey] =
           XSalsa20Poly1305.authEncryptor
@@ -79,7 +80,7 @@ object Cryptography {
       }
 
       override def decrypt(authentication: Authentication,
-                           challenge: Challenge): Option[Key] = {
+                           challenge: Challenge): Option[RootKey] = {
 
         implicit val counterStrategy: IvGen[SyncIO, XSalsa20Poly1305] =
           XSalsa20Poly1305.defaultIvGen
@@ -96,7 +97,7 @@ object Cryptography {
           c = CipherText[XSalsa20Poly1305](RawCipherText(content.toArray),
                                            Iv(nonce.toArray))
           d <- XSalsa20Poly1305.decrypt(c, k)
-          key <- SyncIO(Key.from(ByteVector(d)).get)
+          key <- SyncIO(RootKey.from(ByteVector(d)).get)
         } yield key
 
         program

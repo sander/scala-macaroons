@@ -20,16 +20,16 @@ object MacaroonSuite extends SimpleIOSuite {
 
   test("serialization") {
     for {
-      keys <- Key.stream.take(2).compile.toList
+      keys <- RootKey.stream.take(2).compile.toList
       mid <- IO(Identifier.from("mid").get)
       cid <- IO(Identifier.from("caveat").get)
       x = Macaroon
         .create(keys.head, mid, None)
-        .attenuate(cid)
+        .addFirstPartyCaveat(cid)
       vid <- IO(Identifier.from("3p").get)
-      x2 <- x.attenuate(keys(1), vid, None)
-      x3 <- x.attenuate(keys(1), vid, None)
-      y = macaroonV2.encode(x).require.bytes.toBase64UrlNoPad
+      x2 <- x.addThirdPartyCaveat(keys(1), vid, None)
+      x3 <- x.addThirdPartyCaveat(keys(1), vid, None)
+      y = macaroonV2.encode(x2).require.bytes.toBase64UrlNoPad
       _ <- Logger[IO].info(s"mac: $y")
 //      x <- IO.pure(
 //        Capability

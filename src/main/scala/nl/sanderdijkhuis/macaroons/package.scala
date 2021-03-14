@@ -33,10 +33,10 @@ package object macaroons {
       Some(Challenge(value))
   }
 
-  @newtype case class Key private (toByteVector: ByteVector)
-  object Key {
+  @newtype case class RootKey private (toByteVector: ByteVector)
+  object RootKey {
 
-    def stream[F[_]: Sync]: Stream[F, Key] =
+    def stream[F[_]: Sync]: Stream[F, RootKey] =
       for {
         m <- Stream.eval[F, ManagedRandom](Sync[F].delay(new ManagedRandom {}))
         k <- Stream
@@ -45,9 +45,9 @@ package object macaroons {
               .delay(new Array[Byte](32).tap(m.nextBytes))
               .map(ByteVector(_)))
           .repeat
-      } yield Key(k)
+      } yield RootKey(k)
 
-    def from(value: ByteVector): Option[Key] = Some(Key(value))
+    def from(value: ByteVector): Option[RootKey] = Some(RootKey(value))
   }
 
   @newtype case class Location private (value: String)
