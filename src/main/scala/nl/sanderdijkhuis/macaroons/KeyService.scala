@@ -4,11 +4,13 @@ import shapeless._
 
 trait KeyService[F[_]] {
 
+  def generate(): F[RootKey]
+
   def protectAsFirstParty(key: RootKey): F[Identifier]
 
-  def protectAsThirdParty(key: RootKey, identifier: Identifier): F[Identifier]
-
   def recoverAsFirstParty(identifier: Identifier): F[RootKey]
+
+  def protectAsThirdParty(key: RootKey, identifier: Identifier): F[Identifier]
 
   /**
     * 1P will send rootkey + mid to 3P; 3P will return new cid
@@ -16,4 +18,9 @@ trait KeyService[F[_]] {
     */
   def recoverAsThirdParty(
       identifier: Identifier): F[RootKey :: Identifier :: HNil]
+}
+
+object KeyService {
+
+  def apply[F[_]](implicit service: KeyService[F]): KeyService[F] = service
 }
