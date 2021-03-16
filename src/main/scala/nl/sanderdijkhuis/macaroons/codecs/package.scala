@@ -19,9 +19,8 @@ package object codecs {
     requiredField(2, bytes.xmap[Identifier](Identifier.apply, _.toByteVector))
   private val optionalVerificationKeyId: Codec[Option[Challenge]] =
     optionalField(4, bytes.xmap[Challenge](Challenge.apply, _.toByteVector))
-  private val authenticationTag: Codec[Authentication] = requiredField(
-    6,
-    bytes.xmap[Authentication](Authentication.apply, _.toByteVector))
+  private val authenticationTag: Codec[Tag] =
+    requiredField(6, bytes.xmap[Tag](Tag.apply, _.toByteVector))
 
   private val caveat: Codec[Caveat] =
     (optionalLocation :: identifier :: optionalVerificationKeyId)

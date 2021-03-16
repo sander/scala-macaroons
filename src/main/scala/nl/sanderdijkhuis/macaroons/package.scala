@@ -15,7 +15,16 @@ package object macaroons {
 
   trait Authority
 
-  @newtype case class Authentication(toByteVector: ByteVector)
+  @newtype case class Tag(toByteVector: ByteVector) {
+
+    def ++(other: Tag): ByteVector =
+      toByteVector ++ other.toByteVector
+  }
+  object Tag {
+
+    def apply(byteArray: Array[Byte]): Tag =
+      apply(ByteVector(byteArray))
+  }
 
   @newtype final case class Identifier private (toByteVector: ByteVector)
   object Identifier {
@@ -25,6 +34,8 @@ package object macaroons {
     def from(value: String): Option[Identifier] =
       ByteVector.encodeUtf8(value).toOption.flatMap(from)
   }
+
+  @newtype case class Predicate(toIdentifier: Identifier)
 
   @newtype case class Challenge private (toByteVector: ByteVector)
   object Challenge {

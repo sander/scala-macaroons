@@ -13,22 +13,31 @@ trait RootKeyManagement[F[_], RootKey] {
 
   def generate(): F[RootKey]
 
-  def protect(key: RootKey, assertion: Option[Identifier]): F[Identifier]
-  def recover(identifier: Identifier): F[(RootKey, Option[Identifier])]
+//  def protect(key: RootKey, assertion: Option[Identifier]): F[Identifier]
+//  def recover(identifier: Identifier): F[(RootKey, Option[Identifier])]
 
   // move to own typeclass? to also allow for verification keys
-  def authenticate(key: RootKey, identifier: Identifier): F[Authentication]
+  def authenticate(key: RootKey, identifier: Identifier): F[Tag]
 //  def encrypt(authentication: Authentication, key: Key): F[Challenge]
 //  def decrypt(authentication: Authentication, challenge: Challenge): F[Key]
 }
 
 object RootKeyManagement {
 
+//  trait AnotherAttempt[
+//      F[_], RootKey, CaveatRootKey, MacaroonIdentifier, CaveatIdentifier] {
+//    def generateRootKey(): F[RootKey]
+//    def generateCaveatRootKey(): F[CaveatRootKey]
+//    def protect(rootKey: RootKey): F[MacaroonIdentifier]
+//    def recover(macaroonIdentifier: MacaroonIdentifier): F[RootKey]
+//    def recover(caveatIdentifier: CaveatIdentifier)
+//      : F[(CaveatRootKey, CaveatIdentifier)]
+//  }
+
   trait OtherKeyManagement[F[_], OtherKey] {
     def generate(): F[OtherKey]
-    def encrypt(authentication: Authentication, key: OtherKey): F[Challenge]
-    def decrypt(authentication: Authentication,
-                challenge: Challenge): F[OtherKey]
+    def encrypt(authentication: Tag, key: OtherKey): F[Challenge]
+    def decrypt(authentication: Tag, challenge: Challenge): F[OtherKey]
   }
 
 //  trait OtherPrincipal[F[_], Key] {
@@ -55,10 +64,10 @@ object RootKeyManagement {
         identifier: Identifier): F[(TinkRootKey, Option[Identifier])] = ???
 
     override def authenticate(key: TinkRootKey,
-                              identifier: Identifier): F[Authentication] =
+                              identifier: Identifier): F[Tag] =
       Sync[F]
         .delay(key.toKeySetHandle.getPrimitive(classOf[Mac]))
         .map(_.computeMac(identifier.toByteVector.toArray))
-        .map(b => Authentication(ByteVector(b)))
+        .map(b => Tag(ByteVector(b)))
   }
 }

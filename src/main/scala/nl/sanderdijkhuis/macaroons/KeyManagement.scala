@@ -20,49 +20,56 @@ import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import scala.util.chaining._
 
-trait Cryptography[F[_]] {
+trait KeyManagement[F[_]] {
 
-  def authenticate(key: RootKey, identifier: Identifier): Authentication
+  def generateRootKey(): F[RootKey]
 
-  def authenticate(authentication: Authentication,
-                   maybeChallenge: Option[Challenge],
-                   identifier: Identifier): Authentication
+  def authenticateAssertion(key: RootKey, identifier: Identifier): F[Tag]
 
-  def encrypt(authentication: Authentication, rootKey: RootKey): F[Challenge]
+  // make method of macaroon
+//  def authenticateCaveat(authentication: Authentication,
+//                         maybeChallenge: Option[Challenge],
+//                         identifier: Identifier): Authentication
 
-  def decrypt(authentication: Authentication,
-              challenge: Challenge): Option[RootKey]
+  /**
+    * Has effects since encryption is often not deterministic.
+    */
+  def encryptCaveatRootKey(authentication: Tag, rootKey: RootKey): F[Challenge]
 
-  def bind(discharging: Authentication,
-           authorizing: Authentication): Authentication
+  def decryptCaveatRootKey(authentication: Tag,
+                           challenge: Challenge): F[RootKey]
+
+  // make method of macaroon
+  //  def bindDischargingToAuthorizing(discharging: Authentication,
+//                                   authorizing: Authentication): Authentication
 }
 
-object Cryptography {
+object KeyManagement {
 
-  def apply[F[_]](implicit cryptography: Cryptography[F]): Cryptography[F] =
+  def apply[F[_]](implicit cryptography: KeyManagement[F]): KeyManagement[F] =
     cryptography
 
-  implicit def hmacSHA256AndXChaCha20Poly1305[F[_]: Sync]: Cryptography[F] =
-    new Cryptography[F] {
+  implicit def hmacSHA256AndXChaCha20Poly1305[F[_]: Sync]: KeyManagement[F] =
+    new KeyManagement[F] {
 
       private val algorithm = "HmacSHA256"
 
-      override def authenticate(key: RootKey,
-                                identifier: Identifier): Authentication =
-        Authentication(hmac(key.toByteVector, identifier.toByteVector))
+      override def authenticateAssertion(key: RootKey,
+                                         identifier: Identifier): Tag =
+        Tag(hmac(key.toByteVector, identifier.toByteVector))
 
-      override def authenticate(authentication: Authentication,
-                                maybeChallenge: Option[Challenge],
-                                identifier: Identifier): Authentication =
-        Authentication(
+      override def authenticateCaveat(authentication: Tag,
+                                      maybeChallenge: Option[Challenge],
+                                      identifier: Identifier): Tag =
+        Tag(
           hmac(authentication.toByteVector,
                maybeChallenge
                  .map(_.toByteVector)
                  .getOrElse(ByteVector.empty) ++ identifier.toByteVector))
 
       // TODO: might make deterministic sometime: [[https://eprint.iacr.org/2020/067]]
-      override def encrypt(authentication: Authentication,
-                           key: RootKey): F[Challenge] = {
+      override def encryptCaveatRootKey(authentication: Tag,
+                                        key: RootKey): F[Challenge] = {
 
         implicit val counterStrategy: IvGen[F, XSalsa20Poly1305] =
           XSalsa20Poly1305.defaultIvGen[F] // TODO use ChaCha instead, newer
@@ -79,8 +86,9 @@ object Cryptography {
         } yield c
       }
 
-      override def decrypt(authentication: Authentication,
-                           challenge: Challenge): Option[RootKey] = {
+      override def decryptCaveatRootKey(
+          authentication: Tag,
+          challenge: Challenge): Option[RootKey] = {
 
         implicit val counterStrategy: IvGen[SyncIO, XSalsa20Poly1305] =
           XSalsa20Poly1305.defaultIvGen
@@ -106,10 +114,9 @@ object Cryptography {
           .unsafeRunSync()
       }
 
-      override def bind(discharging: Authentication,
-                        authorizing: Authentication): Authentication =
-        Authentication(
-          hash(discharging.toByteVector ++ authorizing.toByteVector))
+      override def bindDischargingToAuthorizing(discharging: Tag,
+                                                authorizing: Tag): Tag =
+        Tag(hash(discharging.toByteVector ++ authorizing.toByteVector))
 
       private def hmac(key: ByteVector, message: ByteVector): ByteVector =
         Mac

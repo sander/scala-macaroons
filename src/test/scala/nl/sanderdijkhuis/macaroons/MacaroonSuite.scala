@@ -17,8 +17,8 @@ object MacaroonSuite extends SimpleIOSuite {
 
 //  implicit def unsafeLogger[F[_]: Sync]: Logger[F] = Slf4jLogger.getLogger[F]
 
-  implicit val cryptography: Cryptography[IO] =
-    Cryptography.hmacSHA256AndXChaCha20Poly1305[IO]
+  implicit val cryptography: KeyManagement[IO] =
+    KeyManagement.hmacSHA256AndXChaCha20Poly1305[IO]
 
   implicit val keyService: KeyService[IO] = new KeyService[IO] {
     override def protectAsFirstParty(key: RootKey): IO[Identifier] =
@@ -42,8 +42,9 @@ object MacaroonSuite extends SimpleIOSuite {
 
   loggedTest("nicer design") { log =>
     for {
-      p <- Principal(Some("photo-site"))
+      p <- Principal("photo-site")
       m <- p.assert()
+      m = m.addFirstPartyCaveat(Identifier.from("foo").get)
     } yield assert(true)
   }
 
