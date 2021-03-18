@@ -1,5 +1,6 @@
 package nl.sanderdijkhuis.macaroons
 
+import cats.data.OptionT
 import fs2.Stream
 import cats.{Applicative, Monad}
 import cats.effect.Sync
@@ -138,36 +139,6 @@ object Macaroon {
         m <- addCaveatHelper(macaroon, identifier, Some(c), maybeLocation)
       } yield m
 
-    /*
-         override def decryptCaveatRootKey(
-          authentication: Tag,
-          challenge: Challenge): Option[RootKey] = {
-
-        implicit val counterStrategy: IvGen[SyncIO, XSalsa20Poly1305] =
-          XSalsa20Poly1305.defaultIvGen
-        implicit val cachedInstance
-          : AuthEncryptor[SyncIO, XSalsa20Poly1305, BouncySecretKey] =
-          XSalsa20Poly1305.authEncryptor
-
-        val program = for {
-          k <- XSalsa20Poly1305
-            .defaultKeyGen[SyncIO]
-            .build(authentication.toByteVector.toArray)
-          (content, nonce) = challenge.toByteVector.splitAt(
-            challenge.toByteVector.length - 24) // TODO
-          c = CipherText[XSalsa20Poly1305](RawCipherText(content.toArray),
-                                           Iv(nonce.toArray))
-          d <- XSalsa20Poly1305.decrypt(c, k)
-          key <- SyncIO(RootKey.from(ByteVector(d)).get)
-        } yield key
-
-        program
-          .map(Some(_))
-          .handleErrorWith(_ => SyncIO.pure(None))
-          .unsafeRunSync()
-      }
-     */
-
     def decrypt(tag: Tag, challenge: Challenge): F[RootKey] =
       for {
         k <- keyGen.build(tag.toByteVector.toArray)
@@ -182,45 +153,36 @@ object Macaroon {
     def verify(macaroon: Macaroon with Authority,
                key: RootKey,
                verifier: Verifier,
-               Ms: Set[Macaroon]): F[VerificationResult] = {
+               macaroons: Set[Macaroon]): F[VerificationResult] = {
+      val Ms = Stream.emits[F, Macaroon](macaroons.toSeq)
       def helper(discharge: Option[Macaroon], k: RootKey): F[Boolean] = {
         val M = discharge.getOrElse(macaroon)
         val caveats = Stream.emits[F, Caveat](M.caveats)
-        val signatures = for {
-          cSig <- Stream.eval(
-            authenticate(M.identifier.toByteVector, toKey(k.toByteVector)))
-          tag <- caveats.evalScan(cSig) {
-            case (cSig, Caveat(_, cId, vId)) =>
-              authenticateCaveat(cSig, vId, cId)
-          }
-        } yield tag
+        val signatures = Stream
+          .eval(authenticate(M.identifier.toByteVector, toKey(k.toByteVector)))
+          .flatMap(cSig =>
+            caveats.evalScan(cSig)((cSig, c) =>
+              authenticateCaveat(cSig, c.maybeChallenge, c.identifier)))
         val verifications = caveats.zip(signatures).flatMap {
           case (Caveat(_, cId, None), _) => Stream.emit(verifier(cId))
           case (Caveat(_, cId, Some(vId)), cSig) =>
-            for {
-              key <- Stream.eval(decrypt(cSig, vId))
-              result <- Stream
-                .emits[F, Macaroon](Ms.toSeq)
-                .filter(_.identifier == cId)
-                .evalMap(m => helper(Some(m), key))
-                .find(_ == true)
-                .lastOr(false)
-            } yield result
+            Stream
+              .eval(decrypt(cSig, vId))
+              .flatMap(
+                key =>
+                  Ms.filter(_.identifier == cId)
+                    .evalMap(m => helper(Some(m), key))
+                    .find(_ == true)
+                    .lastOr(false))
         }
-        val allVerifications =
+        val allCaveatsAreVerified =
           verifications.forall(_ == true).compile.last.map(_.isDefined)
-        val tagCheck = for {
-          maybeLast <- signatures.compile.last
-          last <- Sync[F].fromOption(maybeLast, new Throwable("No signatures"))
-          sig <- discharge match {
-            case Some(_) => bind(macaroon, last)
-            case None    => Sync[F].pure(last)
-          }
-        } yield sig == M.tag
-        for {
-          a <- allVerifications
-          b <- tagCheck
-        } yield a && b
+        val tagValidates = OptionT(signatures.compile.last)
+          .semiflatMap(last =>
+            discharge.fold(last.pure[F])(_ => bind(macaroon, last)))
+          .map(_ == M.tag)
+          .getOrElse(false)
+        allCaveatsAreVerified.flatMap(a => tagValidates.map(b => a && b))
       }
       helper(None, key).map(b => if (b) Verified else VerificationFailed)
     }
