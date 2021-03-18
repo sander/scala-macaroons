@@ -7,6 +7,8 @@ libraryDependencies ++= Seq(
   "io.github.jmcardon" %% "tsec-common" % "0.2.1",
   "io.github.jmcardon" %% "tsec-mac" % "0.2.1",
   "io.github.jmcardon" %% "tsec-hash-jca" % "0.2.1",
+  "io.github.jmcardon" %% "tsec-cipher-jca" % "0.2.1",
+//  "io.github.jmcardon" %% "tsec-libsodium" % "0.2.1",
   "com.google.crypto.tink" % "tink" % "1.5.0",
   "io.github.jmcardon" %% "tsec-cipher-bouncy" % "0.2.1",
   "org.typelevel" %% "log4cats-slf4j" % "1.2.0",
