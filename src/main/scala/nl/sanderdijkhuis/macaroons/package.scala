@@ -15,15 +15,15 @@ package object macaroons {
 
   trait Authority
 
-  @newtype case class Tag(toByteVector: ByteVector) {
+  @newtype case class AuthenticationTag private (toByteVector: ByteVector) {
 
-    def ++(other: Tag): ByteVector =
+    def ++(other: AuthenticationTag): ByteVector =
       toByteVector ++ other.toByteVector
   }
-  object Tag {
+  object AuthenticationTag {
 
-    def apply(byteArray: Array[Byte]): Tag =
-      apply(ByteVector(byteArray))
+    def apply(byteArray: Array[Byte]): AuthenticationTag =
+      AuthenticationTag(ByteVector(byteArray))
   }
 
   @newtype final case class Identifier private (toByteVector: ByteVector)
@@ -59,6 +59,8 @@ package object macaroons {
       } yield RootKey(k)
 
     def from(value: ByteVector): Option[RootKey] = Some(RootKey(value))
+
+    def from(value: Array[Byte]): Option[RootKey] = from(ByteVector(value))
   }
 
   @newtype case class Location private (value: String)
