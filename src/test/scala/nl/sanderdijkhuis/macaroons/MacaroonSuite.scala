@@ -65,7 +65,7 @@ object MacaroonSuite extends SimpleIOSuite {
   loggedTest("nicer design") { log =>
     {
       val keyManagement = KeyManagement[IO]
-      val keyRepository = KeyRepository[IO]
+      val keyRepository = KeyRepository.inMemory[IO].unsafeRunSync()
       val macaroonService = MacaroonService[IO]
       val location = Location("photo-site")
       val principal =
@@ -88,7 +88,7 @@ object MacaroonSuite extends SimpleIOSuite {
         _ = println(s"Macaroon: $macaroon")
         result <- principal.verify(macaroon, _ => VerificationFailed, Set.empty)
         _ = println(s"Result: $result")
-      } yield assert(true)
+      } yield assert(result == VerificationFailed)
     }
   }
 

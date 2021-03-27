@@ -18,6 +18,8 @@ import eu.timepit.refined.string._
 import eu.timepit.refined.scodec.byteVector._
 import eu.timepit.refined.types.string.NonEmptyString
 
+import scala.collection.immutable.Map
+
 trait KeyRepository[F[_]] {
 
   def protectRootKey(rootKey: RootKey): F[Identifier]
@@ -39,7 +41,10 @@ object KeyRepository {
 
   trait Live[F[_]] extends KeyRepository[F] {}
 
-  def apply[F[_]: Sync]: KeyRepository[F] = new Live[F] {
+  trait InMemory[F[_]] extends KeyRepository[F] {
+
+    implicit val sync: Sync[F]
+    val rootKeys: Ref[F, Map[Identifier, RootKey]]
 
     private def generateIdentifier(): F[Identifier] =
       for {
@@ -49,15 +54,51 @@ object KeyRepository {
       } yield Identifier(value)
 
     override def protectRootKey(rootKey: RootKey): F[Identifier] =
-      generateIdentifier() // TODO
+      for {
+        id <- generateIdentifier()
+        _ <- rootKeys.modify(m => (m + (id -> rootKey), ()))
+      } yield id
 
     override def protectRootKeyAndPredicate(
         rootKey: RootKey,
         identifier: Identifier): F[Identifier] = ???
 
-    override def restoreRootKey(identifier: Identifier): F[RootKey] = ???
+    override def restoreRootKey(identifier: Identifier): F[RootKey] =
+      rootKeys.get.flatMap(m =>
+        Sync[F].fromOption(m.get(identifier), new Throwable("not found")))
 
     override def restoreRootKeyAndPredicate(
         identifier: Identifier): F[(RootKey, Predicate)] = ???
   }
+
+  def inMemory[F[_]](implicit F: Sync[F]): F[KeyRepository[F]] =
+    Ref
+      .of[F, Map[Identifier, RootKey]](Map.empty)
+      .map(r =>
+        new InMemory[F] {
+          override implicit val sync: Sync[F] = F
+          override val rootKeys: Ref[F, Map[Identifier, RootKey]] = r
+      })
+
+//  def apply[F[_]: Sync]: KeyRepository[F] = new Live[F] {
+//
+//    private def generateIdentifier(): F[Identifier] =
+//      for {
+//        raw <- SecureRandomId.Interactive.generateF
+//        value <- Sync[F].fromEither(
+//          refineV[NonEmpty](ByteVector(raw.getBytes)).leftMap(new Throwable(_)))
+//      } yield Identifier(value)
+//
+//    override def protectRootKey(rootKey: RootKey): F[Identifier] =
+//      generateIdentifier() // TODO
+//
+//    override def protectRootKeyAndPredicate(
+//        rootKey: RootKey,
+//        identifier: Identifier): F[Identifier] = ???
+//
+//    override def restoreRootKey(identifier: Identifier): F[RootKey] = ???
+//
+//    override def restoreRootKeyAndPredicate(
+//        identifier: Identifier): F[(RootKey, Predicate)] = ???
+//  }
 }
