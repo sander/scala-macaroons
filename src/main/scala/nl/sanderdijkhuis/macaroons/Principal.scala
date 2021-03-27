@@ -11,11 +11,16 @@ trait Principal[F[_]] {
 
   def assert(): F[Macaroon with Authority]
 
-  def addThirdPartyCaveat(
-      macaroon: Macaroon with Authority,
-      identifier: Identifier,
-      thirdParty: ThirdParty[F],
-      maybeLocation: Option[Location]): F[Macaroon with Authority]
+  def addFirstPartyCaveat(macaroon: Macaroon with Authority,
+                          identifier: Identifier): F[Macaroon with Authority]
+
+  def addThirdPartyCaveat(macaroon: Macaroon with Authority,
+                          identifier: Identifier,
+                          thirdParty: ThirdParty[F]): F[Macaroon with Authority]
+
+  def verify(macaroon: Macaroon with Authority,
+             verifier: Verifier,
+             dischargeMacaroons: Set[Macaroon]): F[VerificationResult]
 }
 
 object Principal {
@@ -33,19 +38,33 @@ object Principal {
         m <- macaroonService.generate(cId, rootKey, maybeLocation)
       } yield m
 
+    override def addFirstPartyCaveat(
+        macaroon: Macaroon with Authority,
+        identifier: Identifier): F[Macaroon with Authority] =
+      macaroonService.addFirstPartyCaveat(macaroon, identifier)
+
     override def addThirdPartyCaveat(
         macaroon: Macaroon with Authority,
         identifier: Identifier,
-        thirdParty: ThirdParty[F],
-        maybeLocation: Option[Location]): F[Macaroon with Authority] =
+        thirdParty: ThirdParty[F]): F[Macaroon with Authority] =
       for {
         rootKey <- keyManagement.generateRootKey()
         cId <- thirdParty.prepare(rootKey, identifier)
-        m <- macaroonService.addThirdPartyCaveat(macaroon,
-                                                 rootKey,
-                                                 cId,
-                                                 maybeLocation)
+        loc <- thirdParty.maybeLocation
+        m <- macaroonService.addThirdPartyCaveat(macaroon, rootKey, cId, loc)
       } yield m
+
+    override def verify(
+        macaroon: Macaroon with Authority,
+        verifier: Verifier,
+        dischargeMacaroons: Set[Macaroon]): F[VerificationResult] =
+      for {
+        rootKey <- keyRepository.restoreRootKey(macaroon.identifier)
+        result <- macaroonService.verify(macaroon,
+                                         rootKey,
+                                         verifier,
+                                         dischargeMacaroons)
+      } yield result
   }
 
   def make[F[_]: Sync](maybeLocation: Option[Location])(

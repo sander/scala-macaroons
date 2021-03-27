@@ -68,25 +68,26 @@ object MacaroonSuite extends SimpleIOSuite {
       val keyRepository = KeyRepository[IO]
       val macaroonService = MacaroonService[IO]
       val location = Location("photo-site")
-      val p =
+      val principal =
         Principal.make(Some(location))(keyManagement,
                                        keyRepository,
                                        macaroonService)
       val mid = Identifier(nonEmptyByteVector("mid")) // Identifier.from("mid").get
       val cid = Identifier(nonEmptyByteVector("cid"))
       val vid = Identifier(nonEmptyByteVector("vid"))
-      val thirdParty = new ThirdParty[IO] {
-        override def prepare(rootKey: RootKey,
-                             identifier: Identifier): IO[Identifier] =
+
+      val thirdParty = ThirdParty.make(Some(location)) {
+        (rootKey, identifier) =>
           Identifier(nonEmptyByteVector("aa")).pure[IO]
       }
+
       for {
-        m <- p.assert()
-        m <- macaroonService.addFirstPartyCaveat(m, mid)
-        rootKey <- keyManagement
-          .generateRootKey() // TODO move to principal or macaroonService
-        m <- p.addThirdPartyCaveat(m, vid, thirdParty, None)
-        _ = println(s"Macaroon: $m")
+        macaroon <- principal.assert()
+        macaroon <- principal.addFirstPartyCaveat(macaroon, mid)
+        macaroon <- principal.addThirdPartyCaveat(macaroon, vid, thirdParty)
+        _ = println(s"Macaroon: $macaroon")
+        result <- principal.verify(macaroon, _ => VerificationFailed, Set.empty)
+        _ = println(s"Result: $result")
       } yield assert(true)
     }
   }
