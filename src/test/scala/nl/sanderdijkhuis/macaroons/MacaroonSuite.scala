@@ -2,6 +2,7 @@ package nl.sanderdijkhuis.macaroons
 
 import cats.effect._
 import cats.implicits._
+import eu.timepit.refined.{refineMV, refineV}
 import scodec.bits.HexStringSyntax
 //import cats.implicits._
 import nl.sanderdijkhuis.macaroons.codecs.macaroonV2
@@ -12,6 +13,18 @@ import scodec._
 import scodec.bits.ByteVector
 import scodec.codecs._
 import shapeless.{::, HNil}
+import eu.timepit.refined._
+import eu.timepit.refined.api.RefType.refinedRefType
+import eu.timepit.refined.auto._
+import eu.timepit.refined.numeric._
+import eu.timepit.refined.api.{Failed, Passed, RefType, Refined, Validate}
+import eu.timepit.refined.boolean._
+import eu.timepit.refined.char._
+import eu.timepit.refined.collection._
+import eu.timepit.refined.generic._
+import eu.timepit.refined.string._
+import eu.timepit.refined.scodec.byteVector._
+import eu.timepit.refined.types.string.NonEmptyString
 
 import java.net.URI
 
@@ -52,13 +65,13 @@ object MacaroonSuite extends SimpleIOSuite {
         Principal.make(Some(location))(keyManagement,
                                        keyRepository,
                                        macaroonService)
-      val mid = Identifier.from("mid").get
-      val cid = Identifier.from("caveat").get
-      val vid = Identifier.from("3p").get
+      val mid = Identifier.from("mid").get // Identifier.from("mid").get
+      val cid = Identifier.from("cid").get
+      val vid = Identifier.from("vid").get
       val thirdParty = new ThirdParty[IO] {
         override def prepare(rootKey: RootKey,
                              identifier: Identifier): IO[Identifier] =
-          Identifier(hex"aa").pure[IO]
+          IO.fromOption(Identifier.from("aa"))(new Throwable("x"))
       }
       for {
         m <- p.assert()

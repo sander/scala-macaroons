@@ -8,10 +8,17 @@ import io.estatico.newtype.macros.newtype
 import scodec.bits.ByteVector
 import tsec.common.ManagedRandom
 import eu.timepit.refined._
-import eu.timepit.refined.api.Refined
+import eu.timepit.refined.api.RefType.refinedRefType
 import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric._
-import eu.timepit.refined.predicates.all.NonEmpty
+import eu.timepit.refined.api.{Failed, Passed, RefType, Refined, Validate}
+import eu.timepit.refined.boolean._
+import eu.timepit.refined.char._
+import eu.timepit.refined.collection._
+import eu.timepit.refined.generic._
+import eu.timepit.refined.string._
+import eu.timepit.refined.scodec.byteVector._
+import eu.timepit.refined.types.string.NonEmptyString
 
 import scala.util.chaining._
 import scala.language.implicitConversions
@@ -22,24 +29,31 @@ package object macaroons {
 
   type NonEmptyByteVector = ByteVector Refined NonEmpty
 
-  @newtype case class AuthenticationTag(toByteVector: ByteVector) {
+  implicit val validateNonEmptyByteVector: Validate[ByteVector, NonEmpty] =
+    Validate.fromPredicate(_.length != 0, b => s"$b is empty", Not(Empty()))
 
-    def ++(other: AuthenticationTag): ByteVector =
-      toByteVector ++ other.toByteVector
+  @newtype case class AuthenticationTag(value: NonEmptyByteVector) {
+
+    def toByteVector: ByteVector = value
   }
-//  object AuthenticationTag {
-//
-//    def apply(byteArray: Array[Byte]): AuthenticationTag =
-//      AuthenticationTag(ByteVector(byteArray))
-//  }
 
-  @newtype final case class Identifier(toByteVector: ByteVector)
+  @newtype final case class Identifier(value: NonEmptyByteVector) {
+
+    def toByteVector: ByteVector = value
+  }
   object Identifier {
 
-    def from(value: ByteVector): Option[Identifier] = Some(Identifier(value))
+    def from(value: NonEmptyString): Option[Identifier] =
+      ByteVector
+        .encodeUtf8(value)
+        .toOption
+        .flatMap(v => refineV[NonEmpty](v).toOption)
+        .map(Identifier.apply)
 
-    def from(value: String): Option[Identifier] =
-      ByteVector.encodeUtf8(value).toOption.flatMap(from)
+//    def from(value: ByteVector): Option[Identifier] = Some(Identifier(value))
+//
+//    def from(value: String): Option[Identifier] =
+//      ByteVector.encodeUtf8(value).toOption.flatMap(from)
   }
 
   @newtype case class Predicate(toIdentifier: Identifier)

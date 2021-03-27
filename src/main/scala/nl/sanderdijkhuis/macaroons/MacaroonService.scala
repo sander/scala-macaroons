@@ -21,6 +21,17 @@ import tsec.hashing.jca.SHA256
 import tsec.keygen.symmetric.SymmetricKeyGen
 import tsec.mac.MessageAuth
 import tsec.mac.jca.{HMACSHA256, MacSigningKey}
+import eu.timepit.refined._
+import eu.timepit.refined.api.RefType.refinedRefType
+import eu.timepit.refined.auto._
+import eu.timepit.refined.numeric._
+import eu.timepit.refined.api.{RefType, Refined}
+import eu.timepit.refined.boolean._
+import eu.timepit.refined.char._
+import eu.timepit.refined.collection._
+import eu.timepit.refined.generic._
+import eu.timepit.refined.string._
+import eu.timepit.refined.scodec.byteVector._
 
 import javax.crypto.spec.SecretKeySpec
 
@@ -62,15 +73,28 @@ object MacaroonService {
     implicit val authCipherAPI: AuthCipherAPI[AuthCipher, AuthCipherSecretKey]
     implicit val keyGen: SymmetricKeyGen[F, AuthCipher, AuthCipherSecretKey]
 
+    private def nonEmptyByteVector(
+        byteVector: ByteVector): F[NonEmptyByteVector] = {
+      val x: Either[String, NonEmptyByteVector] = refineV(byteVector)
+      Sync[F].fromEither(x.leftMap(new Exception(_)))
+    }
+
+    private def hash(byteVector: ByteVector): F[NonEmptyByteVector] = {
+      for {
+        a <- hasher.hash(byteVector.toArray).map(ByteVector.apply)
+        b <- nonEmptyByteVector(a)
+      } yield b
+//      val result: Either[String, NonEmptyByteVector] = refineV(
+//        hasher.hash(byteVector.toArray))
+//      Sync[F].fromEither(result.leftMap(new Exception(_)))
+    }
+
     private def bind(authorizing: Macaroon with Authority,
                      dischargingTag: AuthenticationTag): F[AuthenticationTag] =
-      hasher
-        .hash((dischargingTag ++ authorizing.tag).toArray)
-        .map(b => {
-          val converted = b.toArray[Byte]
-//          val x = refineV(ByteVector(converted))
-          AuthenticationTag(ByteVector(converted))
-        })
+      hash(dischargingTag.toByteVector ++ authorizing.tag.toByteVector)
+        .map(AuthenticationTag.apply)
+
+    //      hash(dischargingTag ++ authorizing.tag).map(AuthenticationTag.apply)
 
     def bind(authorizing: Macaroon with Authority,
              discharging: Macaroon): F[Macaroon] =
@@ -79,10 +103,17 @@ object MacaroonService {
     private def toKey(byteVector: ByteVector): MacSigningKey[HmacAlgorithm] =
       MacSigningKey(new SecretKeySpec(byteVector.toArray, mac.algorithm))
 
+//    private def authenticateHelper(data: ByteVector,
+//                                   key: MacSigningKey[HmacAlgorithm]):F[AuthenticationTag] =
+
     private def authenticate(
         data: ByteVector,
         key: MacSigningKey[HmacAlgorithm]): F[AuthenticationTag] =
-      mac.sign(data.toArray, key).map(m => AuthenticationTag(ByteVector(m)))
+      mac
+        .sign(data.toArray, key)
+        .map(ByteVector(_))
+        .flatMap(nonEmptyByteVector)
+        .map(AuthenticationTag(_))
 
     private def authenticateCaveat(
         tag: AuthenticationTag,

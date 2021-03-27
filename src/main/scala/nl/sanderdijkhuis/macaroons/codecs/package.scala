@@ -5,9 +5,22 @@ import scodec._
 import scodec.bits._
 import scodec.codecs._
 import eu.timepit.refined._
-import eu.timepit.refined.api.Refined
+import eu.timepit.refined.api.{RefType, Refined}
+import eu.timepit.refined.auto._
+import eu.timepit.refined.collection.Size
+import eu.timepit.refined.numeric._
+import eu.timepit.refined.scodec._
+import eu.timepit.refined._
+import eu.timepit.refined.api.RefType.refinedRefType
 import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric._
+import eu.timepit.refined.api.{RefType, Refined}
+import eu.timepit.refined.boolean._
+import eu.timepit.refined.char._
+import eu.timepit.refined.collection._
+import eu.timepit.refined.generic._
+import eu.timepit.refined.string._
+import eu.timepit.refined.scodec.byteVector._
 
 package object codecs {
 
@@ -15,18 +28,26 @@ package object codecs {
   private val endOfSectionBytes: ByteVector = hex"00"
   private val endOfSection: Codec[Unit] = constant(endOfSectionBytes)
 
+  private val nonEmptyBytes: Codec[NonEmptyByteVector] =
+    bytes.exmap[NonEmptyByteVector](b =>
+                                      refineV[NonEmpty](b) match {
+                                        case Left(e)  => Attempt.failure(Err(e))
+                                        case Right(n) => Attempt.successful(n)
+                                    },
+                                    n => Attempt.successful(n.value))
+
   private val optionalLocation: Codec[Option[Location]] =
     optionalField(1,
                   utf8.exmap[Location](s => Successful(Location(s)),
                                        loc => Successful(loc.toString)))
   private val identifier: Codec[Identifier] =
-    requiredField(2, bytes.xmap[Identifier](Identifier.apply, _.toByteVector))
+    requiredField(2, nonEmptyBytes.xmap[Identifier](Identifier.apply, _.value))
   private val optionalVerificationKeyId: Codec[Option[Challenge]] =
     optionalField(4, bytes.xmap[Challenge](Challenge.apply, _.toByteVector))
   private val authenticationTag: Codec[AuthenticationTag] =
-    requiredField(
-      6,
-      bytes.xmap[AuthenticationTag](v => AuthenticationTag(v), _.toByteVector))
+    requiredField(6,
+                  nonEmptyBytes
+                    .xmap[AuthenticationTag](AuthenticationTag.apply, _.value))
 
   private val caveat: Codec[Caveat] =
     (optionalLocation :: identifier :: optionalVerificationKeyId)
