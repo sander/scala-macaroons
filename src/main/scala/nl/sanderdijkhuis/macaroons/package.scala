@@ -51,7 +51,7 @@ package object macaroons {
                     maybeChallenge: Option[Challenge])
 
   case class Macaroon(maybeLocation: Option[Location],
-                      identifier: Identifier,
+                      id: Identifier,
                       caveats: Vector[Caveat],
                       tag: AuthenticationTag)
 

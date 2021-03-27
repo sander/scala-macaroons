@@ -1,5 +1,6 @@
 package nl.sanderdijkhuis.macaroons
 
+import cats._
 import cats.data._
 import cats.effect._
 import cats.implicits._
@@ -186,35 +187,35 @@ object MacaroonService {
       def helper(discharge: Option[Macaroon], k: RootKey): F[Boolean] = {
         val M = discharge.getOrElse(macaroon)
         val caveats = Stream.emits[F, Caveat](M.caveats)
-        val signatures = Stream
-          .eval(authenticate(M.identifier.value, toKey(k.value)))
-          .flatMap(cSig =>
-            caveats.evalScan(cSig)((cSig, c) =>
-              authenticateCaveat(cSig, c.maybeChallenge, c.identifier)))
-        val verifications = caveats.zip(signatures).flatMap {
-          case (Caveat(_, cId, None), _) => Stream.emit(verifier(cId))
-          case (Caveat(_, cId, Some(vId)), cSig) =>
-            Stream
-              .eval(decrypt(cSig, vId))
-              .flatMap(
-                key =>
-                  Ms.filter(_.identifier == cId)
-                    .evalMap(m => helper(Some(m), key))
-                    .find(_ == true)
-                    .lastOr(false))
+        val tags = for {
+          cSig <- Stream.eval(authenticate(M.id.value, toKey(k.value)))
+          tag <- caveats.evalScan(cSig)((cSig, c) =>
+            authenticateCaveat(cSig, c.maybeChallenge, c.identifier))
+        } yield tag
+        val verifications = caveats.zip(tags).evalMap {
+          case (Caveat(_, cId, None), _) => verifier(cId).isVerified.pure[F]
+          case (Caveat(_, id, Some(vId)), cSig) =>
+            decrypt(cSig, vId).flatMap(key =>
+              Ms.filter(_.id == id).evalMap(m => helper(m.some, key)).some)
         }
-        val allCaveatsAreVerified =
-          verifications.forall(_ == true).compile.last.map(_.isDefined)
-        val tagValidates = OptionT(signatures.compile.last)
-          .semiflatMap(last =>
-            discharge.fold(last.pure[F])(_ => bind(macaroon, last)))
-          .map(_ == M.tag)
-          .getOrElse(false)
-        allCaveatsAreVerified.flatMap(a => tagValidates.map(b => a && b))
+        val tag = OptionT(tags.compile.last).semiflatMap(last =>
+          discharge.fold(last.pure[F])(_ => bind(macaroon, last)))
+        val tagValidates = tag.map(_ == M.tag).getOrElse(false)
+        verifications.all && tagValidates
       }
 
       helper(None, key).map(b => if (b) Verified else VerificationFailed)
     }
+  }
+
+  implicit class EffectOps[F[_]: Monad](aF: F[Boolean]) {
+    def &&(bF: F[Boolean]): F[Boolean] = aF.flatMap(a => bF.map(b => a && b))
+  }
+  implicit class StreamOps[F[_]: Sync](s: Stream[F, Boolean]) {
+    def all: F[Boolean] =
+      s.forall(v => v).compile.toList.map(_ == List(true))
+    def some: F[Boolean] =
+      s.filter(v => v).head.compile.last.map(_.isDefined)
   }
 
   class Live[F[_]]()(

@@ -59,7 +59,7 @@ object Principal {
         verifier: Verifier,
         dischargeMacaroons: Set[Macaroon]): F[VerificationResult] =
       for {
-        rootKey <- keyRepository.restoreRootKey(macaroon.identifier)
+        rootKey <- keyRepository.restoreRootKey(macaroon.id)
         result <- macaroonService.verify(macaroon,
                                          rootKey,
                                          verifier,
