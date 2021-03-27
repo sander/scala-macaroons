@@ -46,6 +46,15 @@ package object macaroons {
 
   @newtype case class Location(value: NonEmptyString)
 
+  case class Caveat(maybeLocation: Option[Location],
+                    identifier: Identifier,
+                    maybeChallenge: Option[Challenge])
+
+  case class Macaroon(maybeLocation: Option[Location],
+                      identifier: Identifier,
+                      caveats: Vector[Caveat],
+                      tag: AuthenticationTag)
+
   sealed trait VerificationResult {
     def ||(v: => VerificationResult): VerificationResult
     def isVerified: Boolean
