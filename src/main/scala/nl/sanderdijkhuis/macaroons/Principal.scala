@@ -67,11 +67,15 @@ object Principal {
       } yield result
   }
 
+//  def make[F[_]: Sync](maybeLocation: Option[Location])(
+//      keyManagement: KeyManagement[F],
+//      keyRepository: KeyRepository[F],
+//      macaroonService: MacaroonService[F]): Principal[F] =
+//    Live(maybeLocation)(keyManagement, keyRepository, macaroonService)
+
   def make[F[_]: Sync](maybeLocation: Option[Location])(
-      keyManagement: KeyManagement[F],
-      keyRepository: KeyRepository[F],
-      macaroonService: MacaroonService[F]): Principal[F] =
-    Live(maybeLocation)(keyManagement, keyRepository, macaroonService)
+      keyRepository: KeyRepository[F]): Principal[F] =
+    Live(maybeLocation)(KeyManagement[F], keyRepository, MacaroonService[F])
 //  private def create[F[_]: Sync](keyManagement: KeyManagement[F],
 //                                 keyRepository: KeyRepository[F],
 //                                 macaroonService: MacaroonService[F],

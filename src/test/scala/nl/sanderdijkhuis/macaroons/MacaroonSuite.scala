@@ -56,17 +56,22 @@ object MacaroonSuite extends SimpleIOSuite {
           Identifier(nonEmptyByteVector("aa")).pure[IO]
       }
 
+      val targetService = Location("https://target.example/")
+      val forumService = Location("https://forum.example/")
+      val authNService = Location("https://authentication.example/")
+
       for {
-        keyRepository <- KeyRepository.inMemory[IO]
-        principal = Principal.make(Some(location))(keyManagement,
-                                                   keyRepository,
-                                                   macaroonService)
-        macaroon <- principal.assert()
-        macaroon <- principal.addFirstPartyCaveat(macaroon, mid)
-        macaroon <- principal.addThirdPartyCaveat(macaroon, vid, thirdParty)
+        aliceP <- KeyRepository.inMemory.map(Principal.make(None))
+        tsP <- KeyRepository.inMemory.map(Principal.make(Some(targetService)))
+        fsP <- KeyRepository.inMemory.map(Principal.make(Some(forumService)))
+        asP <- KeyRepository.inMemory.map(Principal.make(Some(authNService)))
+        bobP <- KeyRepository.inMemory.map(Principal.make(None))
+        macaroon <- aliceP.assert()
+        macaroon <- aliceP.addFirstPartyCaveat(macaroon, mid)
+        macaroon <- aliceP.addThirdPartyCaveat(macaroon, vid, thirdParty)
         _ = println(s"Macaroon: $macaroon")
         _ = println(s"Encoded: ${macaroonV2.encode(macaroon).map(_.bytes)}")
-        result <- principal.verify(macaroon, _ => VerificationFailed, Set.empty)
+        result <- aliceP.verify(macaroon, _ => VerificationFailed, Set.empty)
         _ = println(s"Result: $result")
       } yield assert(result == VerificationFailed)
     }
