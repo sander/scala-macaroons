@@ -3,6 +3,7 @@ package nl.sanderdijkhuis.macaroons
 import cats.data._
 import cats.effect._
 import cats.implicits._
+import eu.timepit.refined.refineV
 import fs2.Stream
 import scodec.bits.ByteVector
 import tsec.cipher.symmetric.bouncy.{BouncySecretKey, XChaCha20Poly1305}
@@ -67,7 +68,8 @@ object MacaroonService {
         .hash((dischargingTag ++ authorizing.tag).toArray)
         .map(b => {
           val converted = b.toArray[Byte]
-          AuthenticationTag(converted)
+//          val x = refineV(ByteVector(converted))
+          AuthenticationTag(ByteVector(converted))
         })
 
     def bind(authorizing: Macaroon with Authority,
@@ -80,7 +82,7 @@ object MacaroonService {
     private def authenticate(
         data: ByteVector,
         key: MacSigningKey[HmacAlgorithm]): F[AuthenticationTag] =
-      mac.sign(data.toArray, key).map(AuthenticationTag(_))
+      mac.sign(data.toArray, key).map(m => AuthenticationTag(ByteVector(m)))
 
     private def authenticateCaveat(
         tag: AuthenticationTag,

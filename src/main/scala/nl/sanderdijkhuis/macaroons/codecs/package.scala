@@ -4,6 +4,10 @@ import scodec.Attempt.Successful
 import scodec._
 import scodec.bits._
 import scodec.codecs._
+import eu.timepit.refined._
+import eu.timepit.refined.api.Refined
+import eu.timepit.refined.auto._
+import eu.timepit.refined.numeric._
 
 package object codecs {
 
@@ -22,7 +26,7 @@ package object codecs {
   private val authenticationTag: Codec[AuthenticationTag] =
     requiredField(
       6,
-      bytes.xmap[AuthenticationTag](AuthenticationTag.apply, _.toByteVector))
+      bytes.xmap[AuthenticationTag](v => AuthenticationTag(v), _.toByteVector))
 
   private val caveat: Codec[Caveat] =
     (optionalLocation :: identifier :: optionalVerificationKeyId)

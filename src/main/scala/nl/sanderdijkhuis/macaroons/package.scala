@@ -7,6 +7,11 @@ import fs2.Stream
 import io.estatico.newtype.macros.newtype
 import scodec.bits.ByteVector
 import tsec.common.ManagedRandom
+import eu.timepit.refined._
+import eu.timepit.refined.api.Refined
+import eu.timepit.refined.auto._
+import eu.timepit.refined.numeric._
+import eu.timepit.refined.predicates.all.NonEmpty
 
 import scala.util.chaining._
 import scala.language.implicitConversions
@@ -15,18 +20,20 @@ package object macaroons {
 
   trait Authority
 
-  @newtype case class AuthenticationTag private (toByteVector: ByteVector) {
+  type NonEmptyByteVector = ByteVector Refined NonEmpty
+
+  @newtype case class AuthenticationTag(toByteVector: ByteVector) {
 
     def ++(other: AuthenticationTag): ByteVector =
       toByteVector ++ other.toByteVector
   }
-  object AuthenticationTag {
+//  object AuthenticationTag {
+//
+//    def apply(byteArray: Array[Byte]): AuthenticationTag =
+//      AuthenticationTag(ByteVector(byteArray))
+//  }
 
-    def apply(byteArray: Array[Byte]): AuthenticationTag =
-      AuthenticationTag(ByteVector(byteArray))
-  }
-
-  @newtype final case class Identifier private (toByteVector: ByteVector)
+  @newtype final case class Identifier(toByteVector: ByteVector)
   object Identifier {
 
     def from(value: ByteVector): Option[Identifier] = Some(Identifier(value))

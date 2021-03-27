@@ -1,6 +1,8 @@
 package nl.sanderdijkhuis.macaroons
 
 import cats.effect._
+import cats.implicits._
+import scodec.bits.HexStringSyntax
 //import cats.implicits._
 import nl.sanderdijkhuis.macaroons.codecs.macaroonV2
 import org.typelevel.log4cats.Logger
@@ -55,7 +57,8 @@ object MacaroonSuite extends SimpleIOSuite {
       val vid = Identifier.from("3p").get
       val thirdParty = new ThirdParty[IO] {
         override def prepare(rootKey: RootKey,
-                             identifier: Identifier): IO[Identifier] = ???
+                             identifier: Identifier): IO[Identifier] =
+          Identifier(hex"aa").pure[IO]
       }
       for {
         m <- p.assert()

@@ -2,6 +2,8 @@ name := "macaroons"
 version := "0.1.0-SNAPSHOT"
 scalaVersion := "2.13.5"
 
+val refinedVersion = "0.9.21"
+
 libraryDependencies ++= Seq(
   "org.typelevel" %% "cats-effect" % "2.3.1",
   "io.github.jmcardon" %% "tsec-common" % "0.2.1",
@@ -10,6 +12,10 @@ libraryDependencies ++= Seq(
   "io.github.jmcardon" %% "tsec-cipher-jca" % "0.2.1",
 //  "io.github.jmcardon" %% "tsec-libsodium" % "0.2.1",
   "com.google.crypto.tink" % "tink" % "1.5.0",
+  "eu.timepit" %% "refined" % refinedVersion,
+  "eu.timepit" %% "refined-cats" % refinedVersion,
+  "eu.timepit" %% "refined-scodec" % refinedVersion,
+  "eu.timepit" %% "refined-shapeless" % refinedVersion,
   "io.github.jmcardon" %% "tsec-cipher-bouncy" % "0.2.1",
   "org.typelevel" %% "log4cats-slf4j" % "1.2.0",
   "org.slf4j" % "slf4j-simple" % "1.7.30",
