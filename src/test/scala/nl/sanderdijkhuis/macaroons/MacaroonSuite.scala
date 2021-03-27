@@ -55,6 +55,13 @@ object MacaroonSuite extends SimpleIOSuite {
 //    override def generate(): IO[RootKey] = ???
 //  }
 
+  private def nonEmptyByteVector(string: NonEmptyString): NonEmptyByteVector =
+    ByteVector
+      .encodeUtf8(string)
+      .toOption
+      .flatMap(v => refineV[NonEmpty](v).toOption)
+      .get
+
   loggedTest("nicer design") { log =>
     {
       val keyManagement = KeyManagement[IO]
@@ -65,13 +72,13 @@ object MacaroonSuite extends SimpleIOSuite {
         Principal.make(Some(location))(keyManagement,
                                        keyRepository,
                                        macaroonService)
-      val mid = Identifier.from("mid").get // Identifier.from("mid").get
-      val cid = Identifier.from("cid").get
-      val vid = Identifier.from("vid").get
+      val mid = Identifier(nonEmptyByteVector("mid")) // Identifier.from("mid").get
+      val cid = Identifier(nonEmptyByteVector("cid"))
+      val vid = Identifier(nonEmptyByteVector("vid"))
       val thirdParty = new ThirdParty[IO] {
         override def prepare(rootKey: RootKey,
                              identifier: Identifier): IO[Identifier] =
-          IO.fromOption(Identifier.from("aa"))(new Throwable("x"))
+          Identifier(nonEmptyByteVector("aa")).pure[IO]
       }
       for {
         m <- p.assert()

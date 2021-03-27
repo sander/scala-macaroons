@@ -32,36 +32,17 @@ package object macaroons {
   implicit val validateNonEmptyByteVector: Validate[ByteVector, NonEmpty] =
     Validate.fromPredicate(_.length != 0, b => s"$b is empty", Not(Empty()))
 
-  @newtype case class AuthenticationTag(value: NonEmptyByteVector) {
+  // TODO could have more precise type
+  @newtype case class AuthenticationTag(value: NonEmptyByteVector)
 
-    def toByteVector: ByteVector = value
-  }
+  @newtype case class Identifier(value: NonEmptyByteVector)
 
-  @newtype final case class Identifier(value: NonEmptyByteVector) {
+  @newtype case class Predicate(identifier: Identifier)
 
-    def toByteVector: ByteVector = value
-  }
-  object Identifier {
+  @newtype case class Challenge(value: NonEmptyByteVector)
 
-    def from(value: NonEmptyString): Option[Identifier] =
-      ByteVector
-        .encodeUtf8(value)
-        .toOption
-        .flatMap(v => refineV[NonEmpty](v).toOption)
-        .map(Identifier.apply)
-  }
-
-  @newtype case class Predicate(toIdentifier: Identifier)
-
-  @newtype case class Challenge(value: NonEmptyByteVector) {
-
-    def toByteVector: ByteVector = value
-  }
-
-  @newtype case class RootKey(value: NonEmptyByteVector) {
-
-    def toByteVector: ByteVector = value
-  }
+  // TODO could have more precise type
+  @newtype case class RootKey(value: NonEmptyByteVector)
 
   @newtype case class Location(value: NonEmptyString)
 

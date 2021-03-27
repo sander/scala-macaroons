@@ -91,7 +91,7 @@ object MacaroonService {
 
     private def bind(authorizing: Macaroon with Authority,
                      dischargingTag: AuthenticationTag): F[AuthenticationTag] =
-      hash(dischargingTag.toByteVector ++ authorizing.tag.toByteVector)
+      hash(dischargingTag.value ++ authorizing.tag.value)
         .map(AuthenticationTag.apply)
 
     //      hash(dischargingTag ++ authorizing.tag).map(AuthenticationTag.apply)
@@ -119,8 +119,8 @@ object MacaroonService {
         tag: AuthenticationTag,
         maybeChallenge: Option[Challenge],
         identifier: Identifier): F[AuthenticationTag] = {
-      val data = maybeChallenge.fold(ByteVector.empty)(_.toByteVector) ++ identifier.toByteVector
-      authenticate(data, toKey(tag.toByteVector))
+      val data = maybeChallenge.fold(ByteVector.empty)(_.value) ++ identifier.value
+      authenticate(data, toKey(tag.value))
     }
 
     private def addCaveatHelper(
@@ -139,7 +139,7 @@ object MacaroonService {
     def generate(identifier: Identifier,
                  rootKey: RootKey,
                  maybeLocation: Option[Location]): F[Macaroon with Authority] =
-      authenticate(identifier.toByteVector, toKey(rootKey.toByteVector)).map(
+      authenticate(identifier.value, toKey(rootKey.value)).map(
         tag =>
           Macaroon(maybeLocation, identifier, Vector.empty, tag)
             .asInstanceOf[Macaroon with Authority])
@@ -155,8 +155,8 @@ object MacaroonService {
         identifier: Identifier,
         maybeLocation: Option[Location]): F[Macaroon with Authority] =
       for {
-        k <- keyGen.build(macaroon.tag.toByteVector.toArray)
-        t = PlainText(key.toByteVector.toArray)
+        k <- keyGen.build(macaroon.tag.value.toArray)
+        t = PlainText(key.value.toArray)
         e <- authCipherAPI.encrypt[F](t, k)
         c <- Sync[F]
           .fromEither(
@@ -168,9 +168,8 @@ object MacaroonService {
 
     def decrypt(tag: AuthenticationTag, challenge: Challenge): F[RootKey] =
       for {
-        k <- keyGen.build(tag.toByteVector.toArray)
-        (content, nonce) = challenge.toByteVector.splitAt(
-          challenge.toByteVector.length - 24) // TODO
+        k <- keyGen.build(tag.value.toArray)
+        (content, nonce) = challenge.value.splitAt(challenge.value.length - 24) // TODO
         c = CipherText[AuthCipher](RawCipherText(content.toArray),
                                    Iv(nonce.toArray))
         d <- authCipherAPI.decrypt(c, k)
@@ -188,7 +187,7 @@ object MacaroonService {
         val M = discharge.getOrElse(macaroon)
         val caveats = Stream.emits[F, Caveat](M.caveats)
         val signatures = Stream
-          .eval(authenticate(M.identifier.toByteVector, toKey(k.toByteVector)))
+          .eval(authenticate(M.identifier.value, toKey(k.value)))
           .flatMap(cSig =>
             caveats.evalScan(cSig)((cSig, c) =>
               authenticateCaveat(cSig, c.maybeChallenge, c.identifier)))
