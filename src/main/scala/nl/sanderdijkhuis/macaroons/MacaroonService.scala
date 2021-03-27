@@ -113,7 +113,7 @@ object MacaroonService {
         .sign(data.toArray, key)
         .map(ByteVector(_))
         .flatMap(nonEmptyByteVector)
-        .map(AuthenticationTag(_))
+        .map(AuthenticationTag.apply)
 
     private def authenticateCaveat(
         tag: AuthenticationTag,
@@ -158,7 +158,11 @@ object MacaroonService {
         k <- keyGen.build(macaroon.tag.toByteVector.toArray)
         t = PlainText(key.toByteVector.toArray)
         e <- authCipherAPI.encrypt[F](t, k)
-        c <- Sync[F].delay(Challenge.from(ByteVector(e.toConcatenated)).get)
+        c <- Sync[F]
+          .fromEither(
+            refineV[NonEmpty](ByteVector(e.toConcatenated))
+              .leftMap(new Throwable(_)))
+          .map(Challenge.apply)
         m <- addCaveatHelper(macaroon, identifier, Some(c), maybeLocation)
       } yield m
 
@@ -170,8 +174,9 @@ object MacaroonService {
         c = CipherText[AuthCipher](RawCipherText(content.toArray),
                                    Iv(nonce.toArray))
         d <- authCipherAPI.decrypt(c, k)
-        key <- Sync[F].delay(RootKey.from(ByteVector(d)).get)
-      } yield key
+        key <- Sync[F].fromEither(
+          refineV[NonEmpty](ByteVector(d)).leftMap(new Throwable(_)))
+      } yield RootKey(key)
 
     def verify(macaroon: Macaroon with Authority,
                key: RootKey,

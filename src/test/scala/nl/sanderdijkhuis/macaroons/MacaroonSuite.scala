@@ -60,7 +60,7 @@ object MacaroonSuite extends SimpleIOSuite {
       val keyManagement = KeyManagement[IO]
       val keyRepository = KeyRepository[IO]
       val macaroonService = MacaroonService[IO]
-      val location = Location.from("photo-site").get
+      val location = Location("photo-site")
       val p =
         Principal.make(Some(location))(keyManagement,
                                        keyRepository,

@@ -4,6 +4,8 @@ import cats.Monad
 import cats.effect.{IO, LiftIO, Sync, SyncIO}
 import cats.implicits._
 import com.google.crypto.tink.subtle.XChaCha20Poly1305
+import eu.timepit.refined.predicates.all.NonEmpty
+import eu.timepit.refined.refineV
 import scodec.bits.{ByteVector, HexStringSyntax}
 import tsec.cipher.symmetric.{
   AuthEncryptor,
@@ -44,8 +46,11 @@ object KeyManagement {
 
   class Live[F[_]: Sync]() extends KeyManagement[F] {
     override def generateRootKey(): F[RootKey] =
-      SecureRandomId.Strong.generateF.flatMap(b =>
-        Sync[F].delay(RootKey.from(b.getBytes).get))
+      for {
+        raw <- SecureRandomId.Strong.generateF
+        key <- Sync[F].fromEither(
+          refineV[NonEmpty](ByteVector(raw.getBytes)).leftMap(new Throwable(_)))
+      } yield RootKey(key)
   }
 
   def apply[F[_]: Sync]: KeyManagement[F] = new Live()

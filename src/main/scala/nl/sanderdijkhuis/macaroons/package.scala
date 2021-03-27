@@ -49,46 +49,21 @@ package object macaroons {
         .toOption
         .flatMap(v => refineV[NonEmpty](v).toOption)
         .map(Identifier.apply)
-
-//    def from(value: ByteVector): Option[Identifier] = Some(Identifier(value))
-//
-//    def from(value: String): Option[Identifier] =
-//      ByteVector.encodeUtf8(value).toOption.flatMap(from)
   }
 
   @newtype case class Predicate(toIdentifier: Identifier)
 
-  @newtype case class Challenge private (toByteVector: ByteVector)
-  object Challenge {
+  @newtype case class Challenge(value: NonEmptyByteVector) {
 
-    def from(value: ByteVector): Option[Challenge] =
-      Some(Challenge(value))
+    def toByteVector: ByteVector = value
   }
 
-  @newtype case class RootKey private (toByteVector: ByteVector)
-  object RootKey {
+  @newtype case class RootKey(value: NonEmptyByteVector) {
 
-    def stream[F[_]: Sync]: Stream[F, RootKey] =
-      for {
-        m <- Stream.eval[F, ManagedRandom](Sync[F].delay(new ManagedRandom {}))
-        k <- Stream
-          .eval(
-            Sync[F]
-              .delay(new Array[Byte](32).tap(m.nextBytes))
-              .map(ByteVector(_)))
-          .repeat
-      } yield RootKey(k)
-
-    def from(value: ByteVector): Option[RootKey] = Some(RootKey(value))
-
-    def from(value: Array[Byte]): Option[RootKey] = from(ByteVector(value))
+    def toByteVector: ByteVector = value
   }
 
-  @newtype case class Location private (value: String)
-  object Location {
-
-    def from(value: String): Option[Location] = Some(Location(value))
-  }
+  @newtype case class Location(value: NonEmptyString)
 
   sealed trait VerificationResult {
     def ||(v: => VerificationResult): VerificationResult

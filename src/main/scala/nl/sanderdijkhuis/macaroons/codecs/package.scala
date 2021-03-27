@@ -21,6 +21,7 @@ import eu.timepit.refined.collection._
 import eu.timepit.refined.generic._
 import eu.timepit.refined.string._
 import eu.timepit.refined.scodec.byteVector._
+import eu.timepit.refined.types.string.NonEmptyString
 
 package object codecs {
 
@@ -35,15 +36,22 @@ package object codecs {
                                         case Right(n) => Attempt.successful(n)
                                     },
                                     n => Attempt.successful(n.value))
+  private val nonEmptyUtf8: Codec[NonEmptyString] =
+    utf8.exmap[NonEmptyString](b =>
+                                 refineV[NonEmpty](b) match {
+                                   case Left(e)  => Attempt.failure(Err(e))
+                                   case Right(n) => Attempt.successful(n)
+                               },
+                               n => Attempt.successful(n.value))
 
   private val optionalLocation: Codec[Option[Location]] =
     optionalField(1,
-                  utf8.exmap[Location](s => Successful(Location(s)),
-                                       loc => Successful(loc.toString)))
+                  nonEmptyUtf8.exmap[Location](s => Successful(Location(s)),
+                                               loc => Successful(loc.value)))
   private val identifier: Codec[Identifier] =
     requiredField(2, nonEmptyBytes.xmap[Identifier](Identifier.apply, _.value))
   private val optionalVerificationKeyId: Codec[Option[Challenge]] =
-    optionalField(4, bytes.xmap[Challenge](Challenge.apply, _.toByteVector))
+    optionalField(4, nonEmptyBytes.xmap[Challenge](Challenge.apply, _.value))
   private val authenticationTag: Codec[AuthenticationTag] =
     requiredField(6,
                   nonEmptyBytes
