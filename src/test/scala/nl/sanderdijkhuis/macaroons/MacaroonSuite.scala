@@ -53,12 +53,16 @@ object MacaroonSuite extends SimpleIOSuite {
       val mid = Identifier.from("mid").get
       val cid = Identifier.from("caveat").get
       val vid = Identifier.from("3p").get
+      val thirdParty = new ThirdParty[IO] {
+        override def prepare(rootKey: RootKey,
+                             identifier: Identifier): IO[Identifier] = ???
+      }
       for {
         m <- p.assert()
         m <- macaroonService.addFirstPartyCaveat(m, mid)
         rootKey <- keyManagement
           .generateRootKey() // TODO move to principal or macaroonService
-        m <- macaroonService.addThirdPartyCaveat(m, rootKey, vid, None)
+        m <- p.addThirdPartyCaveat(m, vid, thirdParty, None)
         _ = println(s"Macaroon: $m")
       } yield assert(true)
     }

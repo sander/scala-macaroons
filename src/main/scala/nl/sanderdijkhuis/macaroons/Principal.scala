@@ -10,6 +10,12 @@ trait Principal[F[_]] {
 //  def maybeLocation: Option[Location]
 
   def assert(): F[Macaroon with Authority]
+
+  def addThirdPartyCaveat(
+      macaroon: Macaroon with Authority,
+      identifier: Identifier,
+      thirdParty: ThirdParty[F],
+      maybeLocation: Option[Location]): F[Macaroon with Authority]
 }
 
 object Principal {
@@ -25,6 +31,20 @@ object Principal {
         rootKey <- keyManagement.generateRootKey()
         cId <- keyRepository.protectRootKey(rootKey)
         m <- macaroonService.generate(cId, rootKey, maybeLocation)
+      } yield m
+
+    override def addThirdPartyCaveat(
+        macaroon: Macaroon with Authority,
+        identifier: Identifier,
+        thirdParty: ThirdParty[F],
+        maybeLocation: Option[Location]): F[Macaroon with Authority] =
+      for {
+        rootKey <- keyManagement.generateRootKey()
+        cId <- thirdParty.prepare(rootKey, identifier)
+        m <- macaroonService.addThirdPartyCaveat(macaroon,
+                                                 rootKey,
+                                                 cId,
+                                                 maybeLocation)
       } yield m
   }
 
