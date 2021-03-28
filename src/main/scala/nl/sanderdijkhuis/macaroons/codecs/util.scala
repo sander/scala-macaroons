@@ -1,12 +1,9 @@
-package nl.sanderdijkhuis
+package nl.sanderdijkhuis.macaroons.codecs
 
 import eu.timepit.refined.collection.NonEmpty
 import eu.timepit.refined.refineV
 import eu.timepit.refined.types.string.NonEmptyString
-import nl.sanderdijkhuis.macaroons.{
-  NonEmptyByteVector,
-  validateNonEmptyByteVector
-}
+import nl.sanderdijkhuis.macaroons.types.bytes._
 import scodec.Attempt.{Failure, Successful, successful}
 import scodec.bits.BitVector
 import scodec.codecs.{bytes, utf8}
@@ -14,7 +11,7 @@ import scodec.{Attempt, Codec, DecodeResult, Encoder, Err}
 
 import scala.annotation.tailrec
 
-package object codecs {
+object util {
 
   val nonEmptyBytes: Codec[NonEmptyByteVector] =
     bytes.exmap[NonEmptyByteVector](b =>
@@ -44,6 +41,7 @@ package object codecs {
             case Successful(DecodeResult(v, rem)) => helper(rem, acc :+ v)
             case Failure(_)                       => successful(DecodeResult(acc, rest))
           }
+
         helper(bits, Vector.empty)
       }
     )

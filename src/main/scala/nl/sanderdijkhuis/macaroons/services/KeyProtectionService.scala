@@ -6,8 +6,9 @@ import cats.implicits._
 import scodec.bits.ByteVector
 import eu.timepit.refined._
 import eu.timepit.refined.collection._
-import nl.sanderdijkhuis.macaroons.{Identifier, Predicate, RootKey}
+import nl.sanderdijkhuis.macaroons.domain.macaroon._
 import tsec.common.SecureRandomId
+import nl.sanderdijkhuis.macaroons.types.bytes._
 
 import scala.collection.immutable.Map
 
@@ -29,8 +30,6 @@ object KeyProtectionService {
   trait Live[F[_]] extends KeyProtectionService[F] {}
 
   trait InMemory[F[_]] extends KeyProtectionService[F] {
-
-    import nl.sanderdijkhuis.macaroons._
 
     implicit val sync: Sync[F]
     val rootKeys: Ref[F, Map[Identifier, RootKey]]

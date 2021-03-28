@@ -5,16 +5,13 @@ import cats.effect._
 import cats.implicits._
 import eu.timepit.refined.api.RefType.refinedRefType
 import eu.timepit.refined.auto._
-import nl.sanderdijkhuis.macaroons.services.{
-  KeyProtectionService,
-  MacaroonService,
-  PrincipalService,
-  EndpointService
-}
+import nl.sanderdijkhuis.macaroons.domain.macaroon._
+import nl.sanderdijkhuis.macaroons.domain.verification._
+import nl.sanderdijkhuis.macaroons.services._
 import weaver._
 
 //noinspection TypeAnnotation
-object MacaroonSuite extends SimpleIOSuite {
+object MacaroonIntegrationSuite extends SimpleIOSuite {
 
   val targetServiceLocation = Location("https://target.example/")
   val forumServiceLocation = Location("https://forum.example/")

@@ -1,14 +1,15 @@
-package nl.sanderdijkhuis.macaroons
+package nl.sanderdijkhuis.macaroons.codecs
 
 import cats.effect._
 import cats.implicits._
-import nl.sanderdijkhuis.codecs._
+import nl.sanderdijkhuis.macaroons.codecs.util._
+import nl.sanderdijkhuis.macaroons.domain.macaroon._
 import scodec.Attempt.Successful
 import scodec._
 import scodec.bits._
 import scodec.codecs._
 
-package object codecs {
+object macaroon {
 
   private val version: Codec[Unit] = "version" | constant(hex"02")
   private val endOfSection: Codec[Unit] = "eos" | constant(hex"00")

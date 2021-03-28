@@ -8,22 +8,10 @@ import eu.timepit.refined.api.RefType.refinedRefType
 import eu.timepit.refined.auto._
 import eu.timepit.refined.collection._
 import eu.timepit.refined.refineV
+import nl.sanderdijkhuis.macaroons.types.bytes._
 import fs2.Stream
-import nl.sanderdijkhuis.macaroons.{
-  AuthenticationTag,
-  Authority,
-  Caveat,
-  Challenge,
-  Identifier,
-  Location,
-  Macaroon,
-  NonEmptyByteVector,
-  RootKey,
-  VerificationFailed,
-  VerificationResult,
-  Verified,
-  Verifier
-}
+import nl.sanderdijkhuis.macaroons.domain.verification._
+import nl.sanderdijkhuis.macaroons.domain.macaroon._
 import scodec.bits.ByteVector
 import tsec.cipher.symmetric._
 import tsec.cipher.symmetric.bouncy.{BouncySecretKey, XChaCha20Poly1305}
@@ -64,8 +52,6 @@ object MacaroonService {
   trait TsecLive[
       F[_], HashAlgorithm, HmacAlgorithm, AuthCipher, AuthCipherSecretKey[_]]
       extends MacaroonService[F] {
-
-    import nl.sanderdijkhuis.macaroons._
 
     implicit val sync: Sync[F]
     implicit val hasher: CryptoHasher[F, HashAlgorithm]
@@ -197,7 +183,7 @@ object MacaroonService {
         verifications.all && tagValidates
       }
 
-      helper(None, key).map(b => if (b) Verified else VerificationFailed)
+      helper(None, key).map(VerificationResult.from)
     }
   }
 

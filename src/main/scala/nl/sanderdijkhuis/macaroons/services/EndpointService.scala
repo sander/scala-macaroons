@@ -2,7 +2,7 @@ package nl.sanderdijkhuis.macaroons.services
 
 import cats.Applicative
 import cats.implicits._
-import nl.sanderdijkhuis.macaroons.{Identifier, Location, Predicate, RootKey}
+import nl.sanderdijkhuis.macaroons.domain.macaroon._
 
 trait EndpointService[F[_]] {
 

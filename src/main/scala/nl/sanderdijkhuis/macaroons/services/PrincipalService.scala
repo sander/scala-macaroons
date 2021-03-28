@@ -2,17 +2,12 @@ package nl.sanderdijkhuis.macaroons.services
 
 import cats.effect._
 import cats.implicits._
-import nl.sanderdijkhuis.macaroons.{
-  Authority,
-  Identifier,
-  Location,
-  Macaroon,
-  Predicate,
-  RootKey,
+import nl.sanderdijkhuis.macaroons.domain.verification.{
   VerificationFailed,
   VerificationResult,
   Verifier
 }
+import nl.sanderdijkhuis.macaroons.domain.macaroon._
 
 trait PrincipalService[F[_]] {
 
