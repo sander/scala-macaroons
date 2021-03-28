@@ -1,38 +1,37 @@
-package nl.sanderdijkhuis.macaroons
+package nl.sanderdijkhuis.macaroons.services
 
 import cats._
 import cats.data._
 import cats.effect._
 import cats.implicits._
+import eu.timepit.refined.api.RefType.refinedRefType
+import eu.timepit.refined.auto._
+import eu.timepit.refined.collection._
 import eu.timepit.refined.refineV
 import fs2.Stream
-import scodec.bits.ByteVector
-import tsec.cipher.symmetric.bouncy.{BouncySecretKey, XChaCha20Poly1305}
-import tsec.cipher.symmetric.{
-  AuthCipherAPI,
-  AuthEncryptor,
-  CipherText,
-  Iv,
-  IvGen,
-  PlainText,
-  RawCipherText
+import nl.sanderdijkhuis.macaroons.{
+  AuthenticationTag,
+  Authority,
+  Caveat,
+  Challenge,
+  Identifier,
+  Location,
+  Macaroon,
+  NonEmptyByteVector,
+  RootKey,
+  VerificationFailed,
+  VerificationResult,
+  Verified,
+  Verifier
 }
-import tsec.hashing.{CryptoHashAPI, CryptoHasher}
+import scodec.bits.ByteVector
+import tsec.cipher.symmetric._
+import tsec.cipher.symmetric.bouncy.{BouncySecretKey, XChaCha20Poly1305}
+import tsec.hashing.CryptoHasher
 import tsec.hashing.jca.SHA256
 import tsec.keygen.symmetric.SymmetricKeyGen
 import tsec.mac.MessageAuth
 import tsec.mac.jca.{HMACSHA256, MacSigningKey}
-import eu.timepit.refined._
-import eu.timepit.refined.api.RefType.refinedRefType
-import eu.timepit.refined.auto._
-import eu.timepit.refined.numeric._
-import eu.timepit.refined.api.{RefType, Refined}
-import eu.timepit.refined.boolean._
-import eu.timepit.refined.char._
-import eu.timepit.refined.collection._
-import eu.timepit.refined.generic._
-import eu.timepit.refined.string._
-import eu.timepit.refined.scodec.byteVector._
 
 import javax.crypto.spec.SecretKeySpec
 
@@ -66,6 +65,8 @@ object MacaroonService {
       F[_], HashAlgorithm, HmacAlgorithm, AuthCipher, AuthCipherSecretKey[_]]
       extends MacaroonService[F] {
 
+    import nl.sanderdijkhuis.macaroons._
+
     implicit val sync: Sync[F]
     implicit val hasher: CryptoHasher[F, HashAlgorithm]
     implicit val mac: MessageAuth[F, HmacAlgorithm, MacSigningKey]
@@ -85,9 +86,6 @@ object MacaroonService {
         a <- hasher.hash(byteVector.toArray).map(ByteVector.apply)
         b <- nonEmptyByteVector(a)
       } yield b
-//      val result: Either[String, NonEmptyByteVector] = refineV(
-//        hasher.hash(byteVector.toArray))
-//      Sync[F].fromEither(result.leftMap(new Exception(_)))
     }
 
     private def bind(authorizing: Macaroon with Authority,
@@ -95,17 +93,12 @@ object MacaroonService {
       hash(dischargingTag.value ++ authorizing.tag.value)
         .map(AuthenticationTag.apply)
 
-    //      hash(dischargingTag ++ authorizing.tag).map(AuthenticationTag.apply)
-
     def bind(authorizing: Macaroon with Authority,
              discharging: Macaroon): F[Macaroon] =
       bind(authorizing, discharging.tag).map(t => discharging.copy(tag = t))
 
     private def toKey(byteVector: ByteVector): MacSigningKey[HmacAlgorithm] =
       MacSigningKey(new SecretKeySpec(byteVector.toArray, mac.algorithm))
-
-//    private def authenticateHelper(data: ByteVector,
-//                                   key: MacSigningKey[HmacAlgorithm]):F[AuthenticationTag] =
 
     private def authenticate(
         data: ByteVector,
@@ -220,23 +213,11 @@ object MacaroonService {
 
   class Live[F[_]]()(
       implicit override val sync: Sync[F],
-//      override val hasher: CryptoHasher[F, SHA256],
-//      override val mac: MessageAuth[F, HMACSHA256, MacSigningKey],
-//      override val counterStrategy: IvGen[F, XChaCha20Poly1305],
-//      override val encryptor: AuthEncryptor[F,
-//                                            XChaCha20Poly1305,
-//                                            BouncySecretKey],
-//      override val authCipherAPI: AuthCipherAPI[XChaCha20Poly1305,
-//                                                BouncySecretKey],
-//                     override val keyGen: SymmetricKeyGen[F,
-//                                                          XChaCha20Poly1305,
-//                                                          BouncySecretKey]
   ) extends TsecLive[F,
                        SHA256,
                        HMACSHA256,
                        XChaCha20Poly1305,
                        BouncySecretKey] {
-//    val x: CryptoHashAPI[SHA256] = SHA256
     override val hasher: CryptoHasher[F, SHA256] =
       implicitly[CryptoHasher[F, SHA256]]
     override val mac: MessageAuth[F, HMACSHA256, MacSigningKey] =

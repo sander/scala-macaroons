@@ -1,14 +1,20 @@
-package nl.sanderdijkhuis.macaroons
+package nl.sanderdijkhuis.macaroons.services
 
-import cats._
-import cats.data.OptionT
 import cats.effect._
 import cats.implicits._
-import scodec.bits.ByteVector
+import nl.sanderdijkhuis.macaroons.{
+  Authority,
+  Identifier,
+  Location,
+  Macaroon,
+  Predicate,
+  RootKey,
+  VerificationFailed,
+  VerificationResult,
+  Verifier
+}
 
-trait Principal[F[_]] {
-
-//  def maybeLocation: Option[Location]
+trait PrincipalService[F[_]] {
 
   def assert(): F[Macaroon with Authority]
 
@@ -19,22 +25,23 @@ trait Principal[F[_]] {
   def addFirstPartyCaveat(macaroon: Macaroon with Authority,
                           identifier: Identifier): F[Macaroon with Authority]
 
-  def addThirdPartyCaveat(macaroon: Macaroon with Authority,
-                          predicate: Predicate,
-                          thirdParty: ThirdParty[F]): F[Macaroon with Authority]
+  def addThirdPartyCaveat(
+      macaroon: Macaroon with Authority,
+      predicate: Predicate,
+      thirdParty: EndpointService[F]): F[Macaroon with Authority]
 
   def verify(macaroon: Macaroon with Authority,
              verifier: Verifier,
              dischargeMacaroons: Set[Macaroon]): F[VerificationResult]
 }
 
-object Principal {
+object PrincipalService {
 
   case class Live[F[_]: Sync](maybeLocation: Option[Location])(
-      keyManagement: KeyManagement[F],
-      keyRepository: KeyRepository[F],
+      keyManagement: KeyGenerationService[F],
+      keyRepository: KeyProtectionService[F],
       macaroonService: MacaroonService[F])
-      extends Principal[F] {
+      extends PrincipalService[F] {
 
     override def assert(): F[Macaroon with Authority] =
       for {
@@ -62,7 +69,7 @@ object Principal {
     override def addThirdPartyCaveat(
         macaroon: Macaroon with Authority,
         predicate: Predicate,
-        thirdParty: ThirdParty[F]): F[Macaroon with Authority] =
+        thirdParty: EndpointService[F]): F[Macaroon with Authority] =
       for {
         rootKey <- keyManagement.generateRootKey()
         cId <- thirdParty.prepare(rootKey, predicate)
@@ -94,15 +101,17 @@ object Principal {
   }
 
   def make[F[_]: Sync](maybeLocation: Option[Location])(
-      keyRepository: KeyRepository[F]): Principal[F] =
-    Live(maybeLocation)(KeyManagement[F], keyRepository, MacaroonService[F])
+      keyRepository: KeyProtectionService[F]): PrincipalService[F] =
+    Live(maybeLocation)(KeyGenerationService[F],
+                        keyRepository,
+                        MacaroonService[F])
 
   def makeInMemory[F[_]: Sync](
-      maybeLocation: Option[Location]): F[Principal[F]] =
-    KeyRepository.inMemory.map(Principal.make(maybeLocation))
+      maybeLocation: Option[Location]): F[PrincipalService[F]] =
+    KeyProtectionService.inMemory.map(PrincipalService.make(maybeLocation))
 
-  def makeInMemory[F[_]: Sync](location: Location): F[Principal[F]] =
+  def makeInMemory[F[_]: Sync](location: Location): F[PrincipalService[F]] =
     makeInMemory(Some(location))
-  def makeInMemory[F[_]: Sync](): F[Principal[F]] =
+  def makeInMemory[F[_]: Sync](): F[PrincipalService[F]] =
     makeInMemory(None)
 }

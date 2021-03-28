@@ -1,20 +1,21 @@
-package nl.sanderdijkhuis.macaroons
+package nl.sanderdijkhuis.macaroons.services
 
-import cats.{Applicative, Monad}
+import cats.Applicative
 import cats.implicits._
+import nl.sanderdijkhuis.macaroons.{Identifier, Location, Predicate, RootKey}
 
-trait ThirdParty[F[_]] {
+trait EndpointService[F[_]] {
 
   def prepare(rootKey: RootKey, predicate: Predicate): F[Identifier]
 
   def maybeLocation: F[Option[Location]]
 }
 
-object ThirdParty {
+object EndpointService {
 
   def make[F[_]: Applicative](maybeLoc: Option[Location])(
-      f: (RootKey, Predicate) => F[Identifier]): ThirdParty[F] =
-    new ThirdParty[F] {
+      f: (RootKey, Predicate) => F[Identifier]): EndpointService[F] =
+    new EndpointService[F] {
 
       override def prepare(rootKey: RootKey,
                            predicate: Predicate): F[Identifier] =

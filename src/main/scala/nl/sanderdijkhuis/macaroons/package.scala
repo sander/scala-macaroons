@@ -1,30 +1,22 @@
 package nl.sanderdijkhuis
 
 import cats.Monoid
-import cats.effect.Sync
-import cats.implicits._
-import fs2.Stream
 import io.estatico.newtype.macros.newtype
 import scodec.bits.ByteVector
-import tsec.common.ManagedRandom
 import eu.timepit.refined._
 import eu.timepit.refined.api.RefType.refinedRefType
+import eu.timepit.refined.api._
 import eu.timepit.refined.auto._
-import eu.timepit.refined.numeric._
-import eu.timepit.refined.api.{Failed, Passed, RefType, Refined, Validate}
 import eu.timepit.refined.boolean._
-import eu.timepit.refined.char._
 import eu.timepit.refined.collection._
-import eu.timepit.refined.generic._
-import eu.timepit.refined.string._
-import eu.timepit.refined.scodec.byteVector._
 import eu.timepit.refined.types.string.NonEmptyString
 
-import scala.util.chaining._
 import scala.language.implicitConversions
+import scala.util.chaining._
 
 package object macaroons {
 
+  // TODO give better name
   trait Authority
 
   type NonEmptyByteVector = ByteVector Refined NonEmpty
@@ -47,6 +39,7 @@ package object macaroons {
         .pipe(Identifier.apply)
   }
 
+  // TODO apply more
   @newtype case class Predicate(identifier: Identifier)
 
   @newtype case class Challenge(value: NonEmptyByteVector)

@@ -1,41 +1,12 @@
 package nl.sanderdijkhuis.macaroons
 
-import cats._
 import cats.effect._
 import cats.implicits._
-import eu.timepit.refined.collection.NonEmpty
-import eu.timepit.refined.refineV
-import nl.sanderdijkhuis.codecs.{
-  nonEmptyBytes,
-  nonEmptyUtf8,
-  seeWhatHappensVector
-}
+import nl.sanderdijkhuis.codecs._
 import scodec.Attempt.Successful
 import scodec._
 import scodec.bits._
 import scodec.codecs._
-import shapeless.HNil
-
-import scala.:+
-import scala.annotation.tailrec
-//import eu.timepit.refined._
-import eu.timepit.refined.api.{RefType, Refined}
-import eu.timepit.refined.auto._
-import eu.timepit.refined.collection.Size
-import eu.timepit.refined.numeric._
-import eu.timepit.refined.scodec._
-//import eu.timepit.refined._
-import eu.timepit.refined.api.RefType.refinedRefType
-import eu.timepit.refined.auto._
-import eu.timepit.refined.numeric._
-import eu.timepit.refined.api.{RefType, Refined}
-import eu.timepit.refined.boolean._
-import eu.timepit.refined.char._
-//import eu.timepit.refined.collection._
-import eu.timepit.refined.generic._
-import eu.timepit.refined.string._
-import eu.timepit.refined.scodec.byteVector._
-import eu.timepit.refined.types.string.NonEmptyString
 
 package object codecs {
 
@@ -75,9 +46,6 @@ package object codecs {
   val macaroonV2: Codec[Macaroon] =
     (version ~> optionalLocation :: identifier :: endOfSection ~> caveats :: endOfSection ~> authenticationTag)
       .as[Macaroon]
-
-//  val macaroonV2WithAuthority: Codec[Macaroon with Authority] =
-//    macaroonV2.xmap(_.asInstanceOf[Macaroon with Authority], v => v)
 
   private def tag(tagInt: Int): Codec[Unit] =
     "tag" | constant(vlong.encode(tagInt).require)
