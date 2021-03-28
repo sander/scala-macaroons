@@ -60,10 +60,14 @@ object Principal {
         dischargeMacaroons: Set[Macaroon]): F[VerificationResult] =
       for {
         rootKey <- keyRepository.restoreRootKey(macaroon.id)
-        result <- macaroonService.verify(macaroon,
-                                         rootKey,
-                                         verifier,
-                                         dischargeMacaroons)
+        result <- rootKey match {
+          case Some(rootKey) =>
+            macaroonService.verify(macaroon,
+                                   rootKey,
+                                   verifier,
+                                   dischargeMacaroons)
+          case None => VerificationFailed.pure[F]
+        }
       } yield result
   }
 
@@ -76,7 +80,17 @@ object Principal {
   def make[F[_]: Sync](maybeLocation: Option[Location])(
       keyRepository: KeyRepository[F]): Principal[F] =
     Live(maybeLocation)(KeyManagement[F], keyRepository, MacaroonService[F])
-//  private def create[F[_]: Sync](keyManagement: KeyManagement[F],
+
+  def makeInMemory[F[_]: Sync](
+      maybeLocation: Option[Location]): F[Principal[F]] =
+    KeyRepository.inMemory.map(Principal.make(maybeLocation))
+
+  def makeInMemory[F[_]: Sync](location: Location): F[Principal[F]] =
+    makeInMemory(Some(location))
+  def makeInMemory[F[_]: Sync](): F[Principal[F]] =
+    makeInMemory(None)
+
+  //  private def create[F[_]: Sync](keyManagement: KeyManagement[F],
 //                                 keyRepository: KeyRepository[F],
 //                                 macaroonService: MacaroonService[F],
 //                                 location: Option[String])(

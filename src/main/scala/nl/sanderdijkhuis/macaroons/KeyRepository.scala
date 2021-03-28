@@ -27,10 +27,10 @@ trait KeyRepository[F[_]] {
   def protectRootKeyAndPredicate(rootKey: RootKey,
                                  identifier: Identifier): F[Identifier]
 
-  def restoreRootKey(identifier: Identifier): F[RootKey]
+  def restoreRootKey(identifier: Identifier): F[Option[RootKey]]
 
   def restoreRootKeyAndPredicate(
-      identifier: Identifier): F[(RootKey, Predicate)]
+      identifier: Identifier): F[Option[(RootKey, Predicate)]]
 
 }
 
@@ -63,12 +63,11 @@ object KeyRepository {
         rootKey: RootKey,
         identifier: Identifier): F[Identifier] = ???
 
-    override def restoreRootKey(identifier: Identifier): F[RootKey] =
-      rootKeys.get.flatMap(m =>
-        Sync[F].fromOption(m.get(identifier), new Throwable("not found")))
+    override def restoreRootKey(identifier: Identifier): F[Option[RootKey]] =
+      rootKeys.get.map(m => m.get(identifier))
 
     override def restoreRootKeyAndPredicate(
-        identifier: Identifier): F[(RootKey, Predicate)] = ???
+        identifier: Identifier): F[Option[(RootKey, Predicate)]] = ???
   }
 
   def inMemory[F[_]](implicit F: Sync[F]): F[KeyRepository[F]] =

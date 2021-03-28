@@ -3,6 +3,11 @@ package nl.sanderdijkhuis.macaroons
 import cats.effect._
 import cats.implicits._
 import eu.timepit.refined.{refineMV, refineV}
+import nl.sanderdijkhuis.macaroons.codecs.{
+  MacaroonCodec,
+//  lengthValue,
+//  lengthValue2
+}
 import scodec.bits.HexStringSyntax
 //import cats.implicits._
 import nl.sanderdijkhuis.macaroons.codecs.macaroonV2
@@ -30,12 +35,40 @@ import java.net.URI
 
 object MacaroonSuite extends SimpleIOSuite {
 
-  private def nonEmptyByteVector(string: NonEmptyString): NonEmptyByteVector =
+  private def bytes(string: NonEmptyString): NonEmptyByteVector =
     ByteVector
       .encodeUtf8(string)
       .toOption
       .flatMap(v => refineV[NonEmpty](v).toOption)
       .get
+
+  pureTest("y") {
+    expect(utf8.encode("https://target.example/").require.bytes.length == 23L)
+  }
+
+  pureTest("z") {
+    expect(vlong.encode(23L).require.toHex == "17")
+  }
+
+  pureTest("wrong") {
+    expect(vlong.decodeValue(hex"b801".bits).require == 23L)
+  }
+
+  pureTest("good") {
+    expect(vlong.decodeValue(hex"17".bits).require == 23L)
+  }
+
+//  pureTest("refactor") {
+//    val s = "https://target.example/"
+//    println(
+//      lengthValue2(utf8)
+//        .encode(s)
+//        .require)
+//    expect(
+//      lengthValue(utf8).encode(s).require == lengthValue2(utf8)
+//        .encode(s)
+//        .require)
+//  }
 
   loggedTest("nicer design") { log =>
     {
@@ -47,31 +80,51 @@ object MacaroonSuite extends SimpleIOSuite {
 //        Principal.make(Some(location))(keyManagement,
 //                                       keyRepository,
 //                                       macaroonService)
-      val mid = Identifier(nonEmptyByteVector("mid")) // Identifier.from("mid").get
-      val cid = Identifier(nonEmptyByteVector("cid"))
-      val vid = Identifier(nonEmptyByteVector("vid"))
+      val mid = Identifier(bytes("mid")) // Identifier.from("mid").get
+      val cid = Identifier(bytes("cid"))
+      val vid = Identifier(bytes("vid"))
 
-      val thirdParty = ThirdParty.make(Some(location)) {
-        (rootKey, identifier) =>
-          Identifier(nonEmptyByteVector("aa")).pure[IO]
-      }
+      val targetServiceLocation = Location("https://target.example/")
+      val forumServiceLocation = Location("https://forum.example/")
+      val authenticationServiceLocation =
+        Location("https://authentication.example/")
 
-      val targetService = Location("https://target.example/")
-      val forumService = Location("https://forum.example/")
-      val authNService = Location("https://authentication.example/")
+      val remoteAuthenticationService =
+        ThirdParty.make(Some(authenticationServiceLocation)) {
+          (rootKey, identifier) =>
+            Identifier(bytes("aa")).pure[IO]
+        }
+
+      val chunkInRange = Identifier.from("chunk in {100...500}")
+      val opInReadWrite = Identifier.from("op in {read, write}")
+      val timeBefore = Identifier.from("time < 5/1/13 3pm")
+      val userIsBob = Identifier.from("user = bob")
 
       for {
-        aliceP <- KeyRepository.inMemory.map(Principal.make(None))
-        tsP <- KeyRepository.inMemory.map(Principal.make(Some(targetService)))
-        fsP <- KeyRepository.inMemory.map(Principal.make(Some(forumService)))
-        asP <- KeyRepository.inMemory.map(Principal.make(Some(authNService)))
-        bobP <- KeyRepository.inMemory.map(Principal.make(None))
-        macaroon <- aliceP.assert()
-        macaroon <- aliceP.addFirstPartyCaveat(macaroon, mid)
-        macaroon <- aliceP.addThirdPartyCaveat(macaroon, vid, thirdParty)
-        _ = println(s"Macaroon: $macaroon")
-        _ = println(s"Encoded: ${macaroonV2.encode(macaroon).map(_.bytes)}")
-        result <- aliceP.verify(macaroon, _ => VerificationFailed, Set.empty)
+        a <- Principal.makeInMemory() // return Principal and Endpoint?
+        ts <- Principal.makeInMemory(targetServiceLocation)
+        fs <- Principal.makeInMemory(forumServiceLocation)
+        asRepository <- KeyRepository.inMemory
+        as = Principal.make(Some(authenticationServiceLocation))(asRepository)
+        asEndpoint = ThirdParty.make(Some(authenticationServiceLocation))(
+          asRepository.protectRootKeyAndPredicate)
+        bob <- Principal.makeInMemory()
+        m_ts <- ts.assert()
+        m_ts <- ts.addFirstPartyCaveat(m_ts, chunkInRange)
+        m_ts <- ts.addFirstPartyCaveat(m_ts, opInReadWrite)
+        m_ts <- ts.addFirstPartyCaveat(m_ts, timeBefore)
+        _ = println(s"Macaroon: $m_ts")
+        x <- MacaroonCodec.encode[IO](m_ts)
+        _ = println(s"Encoded: $x")
+        y <- MacaroonCodec.decodeAuthorizing[IO](x)
+        _ = println(s"Decoded: $y")
+        m_fs <- MacaroonCodec
+          .encode[IO](m_ts)
+          .flatMap(MacaroonCodec.decodeAuthorizing[IO])
+        m_fs <- fs.addThirdPartyCaveat(m_fs, userIsBob, asEndpoint)
+        // TODO encode and decode, will lose Authority then
+        _ = println(s"Encoded: ${macaroonV2.encode(m_fs).map(_.bytes)}")
+        result <- ts.verify(m_ts, _ => VerificationFailed, Set.empty)
         _ = println(s"Result: $result")
       } yield assert(result == VerificationFailed)
     }

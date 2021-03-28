@@ -36,6 +36,16 @@ package object macaroons {
   @newtype case class AuthenticationTag(value: NonEmptyByteVector)
 
   @newtype case class Identifier(value: NonEmptyByteVector)
+  object Identifier {
+
+    def from(string: NonEmptyString): Identifier =
+      ByteVector
+        .encodeUtf8(string)
+        .toOption
+        .flatMap(v => refineV[NonEmpty](v).toOption)
+        .get
+        .pipe(Identifier.apply)
+  }
 
   @newtype case class Predicate(identifier: Identifier)
 
