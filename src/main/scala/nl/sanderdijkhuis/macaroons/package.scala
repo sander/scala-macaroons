@@ -69,6 +69,10 @@ package object macaroons {
     def ||(v: => VerificationResult): VerificationResult
     def isVerified: Boolean
   }
+  object VerificationResult {
+    def from(b: Boolean): VerificationResult =
+      if (b) Verified else VerificationFailed
+  }
   case object Verified extends VerificationResult {
     override def ||(v: => VerificationResult): VerificationResult = Verified
 

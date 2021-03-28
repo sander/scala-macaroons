@@ -5,7 +5,7 @@ import cats.implicits._
 
 trait ThirdParty[F[_]] {
 
-  def prepare(rootKey: RootKey, identifier: Identifier): F[Identifier]
+  def prepare(rootKey: RootKey, predicate: Predicate): F[Identifier]
 
   def maybeLocation: F[Option[Location]]
 }
@@ -13,12 +13,12 @@ trait ThirdParty[F[_]] {
 object ThirdParty {
 
   def make[F[_]: Applicative](maybeLoc: Option[Location])(
-      f: (RootKey, Identifier) => F[Identifier]): ThirdParty[F] =
+      f: (RootKey, Predicate) => F[Identifier]): ThirdParty[F] =
     new ThirdParty[F] {
 
       override def prepare(rootKey: RootKey,
-                           identifier: Identifier): F[Identifier] =
-        f(rootKey, identifier)
+                           predicate: Predicate): F[Identifier] =
+        f(rootKey, predicate)
 
       override def maybeLocation: F[Option[Location]] = maybeLoc.pure[F]
     }

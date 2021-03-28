@@ -1,6 +1,7 @@
 package nl.sanderdijkhuis.macaroons
 
 import cats._
+import cats.data.OptionT
 import cats.effect._
 import cats.implicits._
 import scodec.bits.ByteVector
@@ -11,11 +12,15 @@ trait Principal[F[_]] {
 
   def assert(): F[Macaroon with Authority]
 
+  def getPredicate(identifier: Identifier): F[Option[Predicate]]
+
+  def discharge(identifier: Identifier): F[Macaroon with Authority]
+
   def addFirstPartyCaveat(macaroon: Macaroon with Authority,
                           identifier: Identifier): F[Macaroon with Authority]
 
   def addThirdPartyCaveat(macaroon: Macaroon with Authority,
-                          identifier: Identifier,
+                          predicate: Predicate,
                           thirdParty: ThirdParty[F]): F[Macaroon with Authority]
 
   def verify(macaroon: Macaroon with Authority,
@@ -38,6 +43,17 @@ object Principal {
         m <- macaroonService.generate(cId, rootKey, maybeLocation)
       } yield m
 
+    override def discharge(identifier: Identifier): F[Macaroon with Authority] =
+      for {
+        rootKey <- keyRepository
+          .restoreRootKeyAndPredicate(identifier)
+          .flatMap[RootKey] {
+            case Some((rootKey, _)) => rootKey.pure[F]
+            case None               => Sync[F].raiseError(new Throwable("Not found"))
+          }
+        m <- macaroonService.generate(identifier, rootKey, maybeLocation)
+      } yield m
+
     override def addFirstPartyCaveat(
         macaroon: Macaroon with Authority,
         identifier: Identifier): F[Macaroon with Authority] =
@@ -45,11 +61,11 @@ object Principal {
 
     override def addThirdPartyCaveat(
         macaroon: Macaroon with Authority,
-        identifier: Identifier,
+        predicate: Predicate,
         thirdParty: ThirdParty[F]): F[Macaroon with Authority] =
       for {
         rootKey <- keyManagement.generateRootKey()
-        cId <- thirdParty.prepare(rootKey, identifier)
+        cId <- thirdParty.prepare(rootKey, predicate)
         loc <- thirdParty.maybeLocation
         m <- macaroonService.addThirdPartyCaveat(macaroon, rootKey, cId, loc)
       } yield m
@@ -69,13 +85,13 @@ object Principal {
           case None => VerificationFailed.pure[F]
         }
       } yield result
-  }
 
-//  def make[F[_]: Sync](maybeLocation: Option[Location])(
-//      keyManagement: KeyManagement[F],
-//      keyRepository: KeyRepository[F],
-//      macaroonService: MacaroonService[F]): Principal[F] =
-//    Live(maybeLocation)(keyManagement, keyRepository, macaroonService)
+    override def getPredicate(identifier: Identifier): F[Option[Predicate]] =
+      keyRepository.restoreRootKeyAndPredicate(identifier).map {
+        case Some((_, predicate)) => Some(predicate)
+        case None                 => None
+      }
+  }
 
   def make[F[_]: Sync](maybeLocation: Option[Location])(
       keyRepository: KeyRepository[F]): Principal[F] =
@@ -89,28 +105,4 @@ object Principal {
     makeInMemory(Some(location))
   def makeInMemory[F[_]: Sync](): F[Principal[F]] =
     makeInMemory(None)
-
-  //  private def create[F[_]: Sync](keyManagement: KeyManagement[F],
-//                                 keyRepository: KeyRepository[F],
-//                                 macaroonService: MacaroonService[F],
-//                                 location: Option[String])(
-//      implicit F: MonadError[F, Throwable]): F[Principal[F]] =
-//    for {
-//      loc <- location match {
-//        case Some(location) =>
-//          F.fromOption(Location.from(location),
-//                        new Throwable("Invalid location"))
-//            .map(Some(_))
-//        case None => F.pure(None)
-//      }
-//    } yield Live[F](keyManagement, keyRepository, macaroonService, loc)
-//
-//  def apply[F[_]: Sync](
-//      keyManagement: KeyManagement[F],
-//      keyRepository: KeyRepository[F],
-//      macaroonService: MacaroonService[F])(location: String): F[Principal[F]] =
-//    create(keyManagement, keyRepository, macaroonService, Some(location))
-
-//  def apply[F[_]: Sync](): F[Principal[F]] =
-//    create(None)
 }

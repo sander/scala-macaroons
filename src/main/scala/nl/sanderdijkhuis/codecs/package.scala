@@ -11,16 +11,6 @@ import scodec.Attempt.{Failure, Successful, successful}
 import scodec.bits.BitVector
 import scodec.codecs.{bytes, utf8}
 import scodec.{Attempt, Codec, DecodeResult, Encoder, Err}
-import eu.timepit.refined._
-import eu.timepit.refined.api.{RefType, Refined}
-import eu.timepit.refined.auto._
-import eu.timepit.refined.collection.Size
-import eu.timepit.refined.numeric._
-import eu.timepit.refined.scodec._
-import eu.timepit.refined.generic._
-import eu.timepit.refined.string._
-import eu.timepit.refined.scodec.byteVector._
-import eu.timepit.refined.types.string.NonEmptyString
 
 import scala.annotation.tailrec
 

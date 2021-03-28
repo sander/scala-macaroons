@@ -25,13 +25,12 @@ trait KeyRepository[F[_]] {
   def protectRootKey(rootKey: RootKey): F[Identifier]
 
   def protectRootKeyAndPredicate(rootKey: RootKey,
-                                 identifier: Identifier): F[Identifier]
+                                 predicate: Predicate): F[Identifier]
 
   def restoreRootKey(identifier: Identifier): F[Option[RootKey]]
 
   def restoreRootKeyAndPredicate(
       identifier: Identifier): F[Option[(RootKey, Predicate)]]
-
 }
 
 object KeyRepository {
@@ -45,6 +44,7 @@ object KeyRepository {
 
     implicit val sync: Sync[F]
     val rootKeys: Ref[F, Map[Identifier, RootKey]]
+    val rootKeysAndPredicates: Ref[F, Map[Identifier, (RootKey, Predicate)]]
 
     private def generateIdentifier(): F[Identifier] =
       for {
@@ -61,22 +61,32 @@ object KeyRepository {
 
     override def protectRootKeyAndPredicate(
         rootKey: RootKey,
-        identifier: Identifier): F[Identifier] = ???
+        predicate: Predicate): F[Identifier] =
+      for {
+        id <- generateIdentifier()
+        _ <- rootKeysAndPredicates.modify(m =>
+          (m + (id -> (rootKey, predicate)), ()))
+      } yield id
 
     override def restoreRootKey(identifier: Identifier): F[Option[RootKey]] =
       rootKeys.get.map(m => m.get(identifier))
 
     override def restoreRootKeyAndPredicate(
-        identifier: Identifier): F[Option[(RootKey, Predicate)]] = ???
+        identifier: Identifier): F[Option[(RootKey, Predicate)]] =
+      rootKeysAndPredicates.get.map(_.get(identifier))
   }
 
   def inMemory[F[_]](implicit F: Sync[F]): F[KeyRepository[F]] =
-    Ref
-      .of[F, Map[Identifier, RootKey]](Map.empty)
-      .map(r =>
+    (Ref
+       .of[F, Map[Identifier, RootKey]](Map.empty),
+     Ref
+       .of[F, Map[Identifier, (RootKey, Predicate)]](Map.empty))
+      .mapN((r1, r2) =>
         new InMemory[F] {
           override implicit val sync: Sync[F] = F
-          override val rootKeys: Ref[F, Map[Identifier, RootKey]] = r
+          override val rootKeys: Ref[F, Map[Identifier, RootKey]] = r1
+          override val rootKeysAndPredicates
+            : Ref[F, Map[Identifier, (RootKey, Predicate)]] = r2
       })
 
 //  def apply[F[_]: Sync]: KeyRepository[F] = new Live[F] {
