@@ -79,8 +79,10 @@ object PrincipalService {
       for {
         rootKey <- generateRootKey()
         cId <- thirdParty.prepare(rootKey, predicate)
-        loc <- thirdParty.maybeLocation
-        m <- macaroonService.addThirdPartyCaveat(macaroon, rootKey, cId, loc)
+        m <- macaroonService.addThirdPartyCaveat(macaroon,
+                                                 rootKey,
+                                                 cId,
+                                                 thirdParty.maybeLocation)
       } yield m
 
     override def verify(

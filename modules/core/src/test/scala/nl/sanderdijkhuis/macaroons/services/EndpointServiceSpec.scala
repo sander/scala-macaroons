@@ -13,13 +13,12 @@ import weaver._
 
 object EndpointServiceSpec extends SimpleIOSuite {
 
-  test("keeps the location") {
+  pureTest("keeps the location") {
     val location = Location("https://example.com/")
     def protect(rootKey: RootKey, predicate: Predicate) =
       Identifier.from("id").pure[IO]
-    for {
-      loc1 <- EndpointService.make(None)(protect).maybeLocation
-      loc2 <- EndpointService.make(Some(location))(protect).maybeLocation
-    } yield assert.all(loc1.isEmpty, loc2.contains(location))
+    val loc1 = EndpointService.make(None)(protect).maybeLocation
+    val loc2 = EndpointService.make(Some(location))(protect).maybeLocation
+    assert.all(loc1.isEmpty, loc2.contains(location))
   }
 }
