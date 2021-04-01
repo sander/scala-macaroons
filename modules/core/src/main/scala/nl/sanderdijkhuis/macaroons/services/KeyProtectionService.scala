@@ -12,6 +12,9 @@ import nl.sanderdijkhuis.macaroons.types.bytes._
 
 import scala.collection.immutable.Map
 
+/**
+  * Represents the capability to protect keys, by wrapping or by secure storage.
+  */
 trait KeyProtectionService[F[_]] {
 
   def protectRootKey(rootKey: RootKey): F[Identifier]

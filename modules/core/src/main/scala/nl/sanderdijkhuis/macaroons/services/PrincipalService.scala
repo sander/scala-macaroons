@@ -2,12 +2,17 @@ package nl.sanderdijkhuis.macaroons.services
 
 import cats.effect._
 import cats.implicits._
+import eu.timepit.refined.predicates.all.NonEmpty
+import eu.timepit.refined.refineV
 import nl.sanderdijkhuis.macaroons.domain.verification.{
   VerificationFailed,
   VerificationResult,
   Verifier
 }
 import nl.sanderdijkhuis.macaroons.domain.macaroon._
+import nl.sanderdijkhuis.macaroons.types.bytes._
+import scodec.bits.ByteVector
+import tsec.common.SecureRandomId
 
 trait PrincipalService[F[_]] {
 
@@ -32,15 +37,21 @@ trait PrincipalService[F[_]] {
 
 object PrincipalService {
 
+  def generateRootKey[F[_]: Sync](): F[RootKey] =
+    for {
+      raw <- SecureRandomId.Strong.generateF
+      key <- Sync[F].fromEither(
+        refineV[NonEmpty](ByteVector(raw.getBytes)).leftMap(new Throwable(_)))
+    } yield RootKey(key)
+
   case class Live[F[_]: Sync](maybeLocation: Option[Location])(
-      keyManagement: KeyGenerationService[F],
       keyRepository: KeyProtectionService[F],
       macaroonService: MacaroonService[F])
       extends PrincipalService[F] {
 
     override def assert(): F[Macaroon with Authority] =
       for {
-        rootKey <- keyManagement.generateRootKey()
+        rootKey <- generateRootKey()
         cId <- keyRepository.protectRootKey(rootKey)
         m <- macaroonService.generate(cId, rootKey, maybeLocation)
       } yield m
@@ -66,7 +77,7 @@ object PrincipalService {
         predicate: Predicate,
         thirdParty: EndpointService[F]): F[Macaroon with Authority] =
       for {
-        rootKey <- keyManagement.generateRootKey()
+        rootKey <- generateRootKey()
         cId <- thirdParty.prepare(rootKey, predicate)
         loc <- thirdParty.maybeLocation
         m <- macaroonService.addThirdPartyCaveat(macaroon, rootKey, cId, loc)
@@ -97,9 +108,7 @@ object PrincipalService {
 
   def make[F[_]: Sync](maybeLocation: Option[Location])(
       keyRepository: KeyProtectionService[F]): PrincipalService[F] =
-    Live(maybeLocation)(KeyGenerationService[F],
-                        keyRepository,
-                        MacaroonService[F])
+    Live(maybeLocation)(keyRepository, MacaroonService[F])
 
   def makeInMemory[F[_]: Sync](
       maybeLocation: Option[Location]): F[PrincipalService[F]] =

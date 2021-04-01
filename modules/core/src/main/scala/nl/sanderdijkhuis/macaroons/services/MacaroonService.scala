@@ -23,6 +23,9 @@ import tsec.mac.jca.{HMACSHA256, MacSigningKey}
 
 import javax.crypto.spec.SecretKeySpec
 
+/**
+  * Operations for generating and manipulating [[Macaroon]]s.
+  */
 trait MacaroonService[F[_]] {
 
   def generate(identifier: Identifier,

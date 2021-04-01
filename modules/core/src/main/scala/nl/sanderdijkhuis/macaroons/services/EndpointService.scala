@@ -4,6 +4,9 @@ import cats.Applicative
 import cats.implicits._
 import nl.sanderdijkhuis.macaroons.domain.macaroon._
 
+/**
+  * Represents a remote principal.
+  */
 trait EndpointService[F[_]] {
 
   def prepare(rootKey: RootKey, predicate: Predicate): F[Identifier]
@@ -23,4 +26,5 @@ object EndpointService {
 
       override def maybeLocation: F[Option[Location]] = maybeLoc.pure[F]
     }
+
 }
