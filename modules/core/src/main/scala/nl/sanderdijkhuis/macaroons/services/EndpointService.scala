@@ -5,7 +5,7 @@ import nl.sanderdijkhuis.macaroons.domain.macaroon._
 /**
   * Represents a remote principal.
   */
-trait EndpointService[F[_]] {
+trait EndpointService[F[_], RootKey] {
 
   def prepare(rootKey: RootKey, predicate: Predicate): F[Identifier]
 
@@ -14,9 +14,9 @@ trait EndpointService[F[_]] {
 
 object EndpointService {
 
-  def make[F[_]](maybeLoc: Option[Location])(
-      f: (RootKey, Predicate) => F[Identifier]): EndpointService[F] =
-    new EndpointService[F] {
+  def make[F[_], RootKey](maybeLoc: Option[Location])(
+      f: (RootKey, Predicate) => F[Identifier]): EndpointService[F, RootKey] =
+    new EndpointService[F, RootKey] {
       override def prepare(rootKey: RootKey,
                            predicate: Predicate): F[Identifier] =
         f(rootKey, predicate)

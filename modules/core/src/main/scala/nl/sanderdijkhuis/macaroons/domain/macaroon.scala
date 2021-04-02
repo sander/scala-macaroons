@@ -36,9 +36,6 @@ object macaroon {
 
   @newtype case class Challenge(value: NonEmptyByteVector)
 
-  // TODO could have more precise type
-  @newtype case class RootKey(value: NonEmptyByteVector)
-
   @newtype case class Location(value: NonEmptyString)
 
   case class Caveat(maybeLocation: Option[Location],

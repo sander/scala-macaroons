@@ -7,15 +7,15 @@ import scodec.bits.ByteVector
 import eu.timepit.refined._
 import eu.timepit.refined.collection._
 import nl.sanderdijkhuis.macaroons.domain.macaroon._
-import tsec.common.SecureRandomId
 import nl.sanderdijkhuis.macaroons.types.bytes._
+import tsec.common.SecureRandomId
 
 import scala.collection.immutable.Map
 
 /**
   * Represents the capability to protect keys, by wrapping or by secure storage.
   */
-trait KeyProtectionService[F[_]] {
+trait KeyProtectionService[F[_], RootKey] {
 
   def protectRootKey(rootKey: RootKey): F[Identifier]
 
@@ -30,9 +30,7 @@ trait KeyProtectionService[F[_]] {
 
 object KeyProtectionService {
 
-  trait Live[F[_]] extends KeyProtectionService[F] {}
-
-  trait InMemory[F[_]] extends KeyProtectionService[F] {
+  trait InMemory[F[_], RootKey] extends KeyProtectionService[F, RootKey] {
 
     implicit val sync: Sync[F]
     val rootKeys: Ref[F, Map[Identifier, RootKey]]
@@ -68,11 +66,12 @@ object KeyProtectionService {
       rootKeysAndPredicates.get.map(_.get(identifier))
   }
 
-  def inMemory[F[_]](implicit F: Sync[F]): F[KeyProtectionService[F]] =
+  def inMemory[F[_], RootKey](
+      implicit F: Sync[F]): F[KeyProtectionService[F, RootKey]] =
     (Ref.of[F, Map[Identifier, RootKey]](Map.empty),
      Ref.of[F, Map[Identifier, (RootKey, Predicate)]](Map.empty))
       .mapN((r1, r2) =>
-        new InMemory[F] {
+        new InMemory[F, RootKey] {
           override implicit val sync: Sync[F] = F
           override val rootKeys: Ref[F, Map[Identifier, RootKey]] = r1
           override val rootKeysAndPredicates

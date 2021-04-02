@@ -2,19 +2,16 @@ package nl.sanderdijkhuis.macaroons.services
 
 import cats.effect._
 import cats.implicits._
-import eu.timepit.refined.predicates.all.NonEmpty
-import eu.timepit.refined.refineV
+import nl.sanderdijkhuis.macaroons.domain.macaroon._
 import nl.sanderdijkhuis.macaroons.domain.verification.{
   VerificationFailed,
   VerificationResult,
   Verifier
 }
-import nl.sanderdijkhuis.macaroons.domain.macaroon._
-import nl.sanderdijkhuis.macaroons.types.bytes._
-import scodec.bits.ByteVector
-import tsec.common.SecureRandomId
+import tsec.keygen.symmetric.SymmetricKeyGen
+import tsec.mac.jca.{HMACSHA256, MacSigningKey}
 
-trait PrincipalService[F[_]] {
+trait PrincipalService[F[_], ThirdParty] {
 
   def assert(): F[Macaroon with Authority]
 
@@ -25,10 +22,9 @@ trait PrincipalService[F[_]] {
   def addFirstPartyCaveat(macaroon: Macaroon with Authority,
                           identifier: Identifier): F[Macaroon with Authority]
 
-  def addThirdPartyCaveat(
-      macaroon: Macaroon with Authority,
-      predicate: Predicate,
-      thirdParty: EndpointService[F]): F[Macaroon with Authority]
+  def addThirdPartyCaveat(macaroon: Macaroon with Authority,
+                          predicate: Predicate,
+                          thirdParty: ThirdParty): F[Macaroon with Authority]
 
   def verify(macaroon: Macaroon with Authority,
              verifier: Verifier,
@@ -37,21 +33,17 @@ trait PrincipalService[F[_]] {
 
 object PrincipalService {
 
-  def generateRootKey[F[_]: Sync](): F[RootKey] =
-    for {
-      raw <- SecureRandomId.Strong.generateF
-      key <- Sync[F].fromEither(
-        refineV[NonEmpty](ByteVector(raw.getBytes)).leftMap(new Throwable(_)))
-    } yield RootKey(key)
-
-  case class Live[F[_]: Sync](maybeLocation: Option[Location])(
-      keyRepository: KeyProtectionService[F],
-      macaroonService: MacaroonService[F])
-      extends PrincipalService[F] {
+  case class Live[F[_]: Sync, HmacAlgorithm](maybeLocation: Option[Location])(
+      keyRepository: KeyProtectionService[F, MacSigningKey[HmacAlgorithm]],
+      macaroonService: MacaroonService[F, MacSigningKey[HmacAlgorithm]])(
+      implicit keyGen: SymmetricKeyGen[F, HmacAlgorithm, MacSigningKey])
+      extends PrincipalService[
+        F,
+        EndpointService[F, MacSigningKey[HmacAlgorithm]]] {
 
     override def assert(): F[Macaroon with Authority] =
       for {
-        rootKey <- generateRootKey()
+        rootKey <- keyGen.generateKey
         cId <- keyRepository.protectRootKey(rootKey)
         m <- macaroonService.generate(cId, rootKey, maybeLocation)
       } yield m
@@ -60,7 +52,7 @@ object PrincipalService {
       for {
         rootKey <- keyRepository
           .restoreRootKeyAndPredicate(identifier)
-          .flatMap[RootKey] {
+          .flatMap[MacSigningKey[HmacAlgorithm]] {
             case Some((rootKey, _)) => rootKey.pure[F]
             case None               => Sync[F].raiseError(new Throwable("Not found"))
           }
@@ -75,9 +67,10 @@ object PrincipalService {
     override def addThirdPartyCaveat(
         macaroon: Macaroon with Authority,
         predicate: Predicate,
-        thirdParty: EndpointService[F]): F[Macaroon with Authority] =
+        thirdParty: EndpointService[F, MacSigningKey[HmacAlgorithm]])
+      : F[Macaroon with Authority] =
       for {
-        rootKey <- generateRootKey()
+        rootKey <- keyGen.generateKey
         cId <- thirdParty.prepare(rootKey, predicate)
         m <- macaroonService.addThirdPartyCaveat(macaroon,
                                                  rootKey,
@@ -109,15 +102,15 @@ object PrincipalService {
   }
 
   def make[F[_]: Sync](maybeLocation: Option[Location])(
-      keyRepository: KeyProtectionService[F]): PrincipalService[F] =
+      keyRepository: KeyProtectionService[F, MacSigningKey[HMACSHA256]])(
+      implicit keyGen: SymmetricKeyGen[F, HMACSHA256, MacSigningKey])
+    : PrincipalService[F, EndpointService[F, MacSigningKey[HMACSHA256]]] =
     Live(maybeLocation)(keyRepository, MacaroonService[F])
 
-  def makeInMemory[F[_]: Sync](
-      maybeLocation: Option[Location]): F[PrincipalService[F]] =
-    KeyProtectionService.inMemory.map(PrincipalService.make(maybeLocation))
-
-  def makeInMemory[F[_]: Sync](location: Location): F[PrincipalService[F]] =
-    makeInMemory(Some(location))
-  def makeInMemory[F[_]: Sync](): F[PrincipalService[F]] =
-    makeInMemory(None)
+  def makeInMemory[F[_]: Sync](maybeLocation: Option[Location])(
+      implicit keyGen: SymmetricKeyGen[F, HMACSHA256, MacSigningKey])
+    : F[PrincipalService[F, EndpointService[F, MacSigningKey[HMACSHA256]]]] =
+    KeyProtectionService
+      .inMemory[F, MacSigningKey[HMACSHA256]]
+      .map(make(maybeLocation))
 }

@@ -6,16 +6,16 @@ import eu.timepit.refined.auto._
 import nl.sanderdijkhuis.macaroons.domain.macaroon.{
   Identifier,
   Location,
-  Predicate,
-  RootKey
+  Predicate
 }
+import tsec.mac.jca.{HMACSHA256, MacSigningKey}
 import weaver._
 
 object EndpointServiceSpec extends SimpleIOSuite {
 
   pureTest("keeps the location") {
     val location = Location("https://example.com/")
-    def protect(rootKey: RootKey, predicate: Predicate) =
+    def protect(rootKey: MacSigningKey[HMACSHA256], predicate: Predicate) =
       Identifier.from("id").pure[IO]
     val loc1 = EndpointService.make(None)(protect).maybeLocation
     val loc2 = EndpointService.make(Some(location))(protect).maybeLocation

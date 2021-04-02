@@ -8,6 +8,7 @@ import eu.timepit.refined.auto._
 import nl.sanderdijkhuis.macaroons.domain.macaroon._
 import nl.sanderdijkhuis.macaroons.domain.verification._
 import nl.sanderdijkhuis.macaroons.services._
+import tsec.mac.jca.{HMACSHA256, MacSigningKey}
 import weaver._
 
 //noinspection TypeAnnotation
@@ -30,10 +31,11 @@ object MacaroonIntegrationSuite extends SimpleIOSuite {
   test("example from paper") {
 
     for {
-      ts <- PrincipalService.makeInMemory(targetServiceLocation)
-      fs <- PrincipalService.makeInMemory(forumServiceLocation)
-      asRepository <- KeyProtectionService.inMemory
-      as = PrincipalService.make(Some(authenticationServiceLocation))(
+      ts <- PrincipalService.makeInMemory(targetServiceLocation.some)
+      fs <- PrincipalService.makeInMemory(forumServiceLocation.some)
+      asRepository <- KeyProtectionService
+        .inMemory[IO, MacSigningKey[HMACSHA256]]
+      as = PrincipalService.make(authenticationServiceLocation.some)(
         asRepository)
       asEndpoint = EndpointService.make(Some(authenticationServiceLocation))(
         asRepository.protectRootKeyAndPredicate)

@@ -26,7 +26,7 @@ import javax.crypto.spec.SecretKeySpec
 /**
   * Operations for generating and manipulating [[Macaroon]]s.
   */
-trait MacaroonService[F[_]] {
+trait MacaroonService[F[_], RootKey] {
 
   def generate(identifier: Identifier,
                rootKey: RootKey,
@@ -54,7 +54,7 @@ object MacaroonService {
 
   trait TsecLive[
       F[_], HashAlgorithm, HmacAlgorithm, AuthCipher, AuthCipherSecretKey[_]]
-      extends MacaroonService[F] {
+      extends MacaroonService[F, MacSigningKey[HmacAlgorithm]] {
 
     implicit val sync: Sync[F]
     implicit val hasher: CryptoHasher[F, HashAlgorithm]
@@ -62,7 +62,10 @@ object MacaroonService {
     implicit val counterStrategy: IvGen[F, AuthCipher]
     implicit val encryptor: AuthEncryptor[F, AuthCipher, AuthCipherSecretKey]
     implicit val authCipherAPI: AuthCipherAPI[AuthCipher, AuthCipherSecretKey]
-    implicit val keyGen: SymmetricKeyGen[F, AuthCipher, AuthCipherSecretKey]
+    implicit val encryptionKeyGen: SymmetricKeyGen[F,
+                                                   AuthCipher,
+                                                   AuthCipherSecretKey]
+    implicit val macKeyGen: SymmetricKeyGen[F, HmacAlgorithm, MacSigningKey]
 
     private def nonEmptyByteVector(
         byteVector: ByteVector): F[NonEmptyByteVector] = {
@@ -120,9 +123,9 @@ object MacaroonService {
     }
 
     def generate(identifier: Identifier,
-                 rootKey: RootKey,
+                 rootKey: MacSigningKey[HmacAlgorithm],
                  maybeLocation: Option[Location]): F[Macaroon with Authority] =
-      authenticate(identifier.value, toKey(rootKey.value)).map(
+      authenticate(identifier.value, rootKey).map(
         tag =>
           Macaroon(maybeLocation, identifier, Vector.empty, tag)
             .asInstanceOf[Macaroon with Authority])
@@ -134,12 +137,12 @@ object MacaroonService {
 
     def addThirdPartyCaveat(
         macaroon: Macaroon with Authority,
-        key: RootKey,
+        key: MacSigningKey[HmacAlgorithm],
         identifier: Identifier,
         maybeLocation: Option[Location]): F[Macaroon with Authority] =
       for {
-        k <- keyGen.build(macaroon.tag.value.toArray)
-        t = PlainText(key.value.toArray)
+        k <- encryptionKeyGen.build(macaroon.tag.value.toArray)
+        t = PlainText(key.toJavaKey.getEncoded)
         e <- authCipherAPI.encrypt[F](t, k)
         c <- Sync[F]
           .fromEither(
@@ -149,28 +152,29 @@ object MacaroonService {
         m <- addCaveatHelper(macaroon, identifier, Some(c), maybeLocation)
       } yield m
 
-    def decrypt(tag: AuthenticationTag, challenge: Challenge): F[RootKey] =
+    def decrypt(tag: AuthenticationTag,
+                challenge: Challenge): F[MacSigningKey[HmacAlgorithm]] =
       for {
-        k <- keyGen.build(tag.value.toArray)
+        k <- encryptionKeyGen.build(tag.value.toArray)
         (content, nonce) = challenge.value.splitAt(challenge.value.length - 24) // TODO
         c = CipherText[AuthCipher](RawCipherText(content.toArray),
                                    Iv(nonce.toArray))
         d <- authCipherAPI.decrypt(c, k)
-        key <- Sync[F].fromEither(
-          refineV[NonEmpty](ByteVector(d)).leftMap(new Throwable(_)))
-      } yield RootKey(key)
+        key <- macKeyGen.build(d)
+      } yield key
 
     def verify(macaroon: Macaroon with Authority,
-               key: RootKey,
+               key: MacSigningKey[HmacAlgorithm],
                verifier: Verifier,
                macaroons: Set[Macaroon]): F[VerificationResult] = {
       val Ms = Stream.emits[F, Macaroon](macaroons.toSeq)
 
-      def helper(discharge: Option[Macaroon], k: RootKey): F[Boolean] = {
+      def helper(discharge: Option[Macaroon],
+                 k: MacSigningKey[HmacAlgorithm]): F[Boolean] = {
         val M = discharge.getOrElse(macaroon)
         val caveats = Stream.emits[F, Caveat](M.caveats)
         val tags = for {
-          cSig <- Stream.eval(authenticate(M.id.value, toKey(k.value)))
+          cSig <- Stream.eval(authenticate(M.id.value, k))
           tag <- caveats.evalScan(cSig)((cSig, c) =>
             authenticateCaveat(cSig, c.maybeChallenge, c.identifier))
         } yield tag
@@ -218,10 +222,13 @@ object MacaroonService {
       implicitly[AuthEncryptor[F, XChaCha20Poly1305, BouncySecretKey]]
     override val authCipherAPI
       : AuthCipherAPI[XChaCha20Poly1305, BouncySecretKey] = XChaCha20Poly1305
-    override val keyGen
+    override val encryptionKeyGen
       : SymmetricKeyGen[F, XChaCha20Poly1305, BouncySecretKey] =
       XChaCha20Poly1305.defaultKeyGen
+    override implicit val macKeyGen
+      : SymmetricKeyGen[F, HMACSHA256, MacSigningKey] = HMACSHA256.genKeyMac
   }
 
-  def apply[F[_]: Sync]: MacaroonService[F] = new Live()
+  def apply[F[_]: Sync]: MacaroonService[F, MacSigningKey[HMACSHA256]] =
+    new Live()
 }
