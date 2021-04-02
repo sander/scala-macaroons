@@ -1,5 +1,6 @@
 package nl.sanderdijkhuis.macaroons.services
 
+import cats.Monad
 import cats.effect._
 import cats.effect.concurrent.Ref
 import cats.implicits._
@@ -30,22 +31,17 @@ trait KeyProtectionService[F[_], RootKey] {
 
 object KeyProtectionService {
 
-  trait InMemory[F[_], RootKey] extends KeyProtectionService[F, RootKey] {
-
-    implicit val sync: Sync[F]
-    val rootKeys: Ref[F, Map[Identifier, RootKey]]
-    val rootKeysAndPredicates: Ref[F, Map[Identifier, (RootKey, Predicate)]]
-
-    private def generateIdentifier(): F[Identifier] =
-      for {
-        raw <- SecureRandomId.Interactive.generateF
-        value <- Sync[F].fromEither(
-          refineV[NonEmpty](ByteVector(raw.getBytes)).leftMap(new Throwable(_)))
-      } yield Identifier(value)
+  class InMemory[F[_]: Monad, RootKey](
+      private val rootKeys: Ref[F, Map[Identifier, RootKey]],
+      private val rootKeysAndPredicates: Ref[
+        F,
+        Map[Identifier, (RootKey, Predicate)]],
+      private val identifier: F[Identifier])
+      extends KeyProtectionService[F, RootKey] {
 
     override def protectRootKey(rootKey: RootKey): F[Identifier] =
       for {
-        id <- generateIdentifier()
+        id <- identifier
         _ <- rootKeys.modify(m => (m + (id -> rootKey), ()))
       } yield id
 
@@ -53,7 +49,7 @@ object KeyProtectionService {
         rootKey: RootKey,
         predicate: Predicate): F[Identifier] =
       for {
-        id <- generateIdentifier()
+        id <- identifier
         _ <- rootKeysAndPredicates.modify(m =>
           (m + (id -> (rootKey, predicate)), ()))
       } yield id
@@ -66,15 +62,18 @@ object KeyProtectionService {
       rootKeysAndPredicates.get.map(_.get(identifier))
   }
 
-  def inMemory[F[_], RootKey](
-      implicit F: Sync[F]): F[KeyProtectionService[F, RootKey]] =
+  def inMemory[F[_]: Sync, RootKey]: F[KeyProtectionService[F, RootKey]] =
     (Ref.of[F, Map[Identifier, RootKey]](Map.empty),
      Ref.of[F, Map[Identifier, (RootKey, Predicate)]](Map.empty))
       .mapN((r1, r2) =>
-        new InMemory[F, RootKey] {
-          override implicit val sync: Sync[F] = F
-          override val rootKeys: Ref[F, Map[Identifier, RootKey]] = r1
-          override val rootKeysAndPredicates
-            : Ref[F, Map[Identifier, (RootKey, Predicate)]] = r2
-      })
+        new InMemory[F, RootKey](
+          r1,
+          r2,
+          for {
+            raw <- SecureRandomId.Interactive.generateF
+            value <- Sync[F].fromEither(
+              refineV[NonEmpty](ByteVector(raw.getBytes))
+                .leftMap(new Throwable(_)))
+          } yield Identifier(value)
+      ))
 }

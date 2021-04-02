@@ -22,6 +22,8 @@ lazy val core = (project in file("modules/core")).settings(
     "org.scodec" %% "scodec-core" % "1.11.7",
     "com.disneystreaming" %% "weaver-cats" % "0.6.0-M6" % Test
   ),
+  addCompilerPlugin(
+    "org.typelevel" % "kind-projector" % "0.11.3" cross CrossVersion.full),
   testFrameworks += new TestFramework("weaver.framework.CatsEffect"),
   scalacOptions ++= Seq("-Ymacro-annotations",
                         "-Xsource:3",
