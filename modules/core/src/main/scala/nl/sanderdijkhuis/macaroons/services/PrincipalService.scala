@@ -37,9 +37,7 @@ object PrincipalService {
       keyRepository: KeyProtectionService[F, MacSigningKey[HmacAlgorithm]],
       macaroonService: MacaroonService[F, MacSigningKey[HmacAlgorithm]])(
       implicit keyGen: SymmetricKeyGen[F, HmacAlgorithm, MacSigningKey])
-      extends PrincipalService[
-        F,
-        EndpointService[F, MacSigningKey[HmacAlgorithm]]] {
+      extends PrincipalService[F, Endpoint[F, MacSigningKey[HmacAlgorithm]]] {
 
     override def assert(): F[Macaroon with Authority] =
       for {
@@ -67,7 +65,7 @@ object PrincipalService {
     override def addThirdPartyCaveat(
         macaroon: Macaroon with Authority,
         predicate: Predicate,
-        thirdParty: EndpointService[F, MacSigningKey[HmacAlgorithm]])
+        thirdParty: Endpoint[F, MacSigningKey[HmacAlgorithm]])
       : F[Macaroon with Authority] =
       for {
         rootKey <- keyGen.generateKey
@@ -104,12 +102,12 @@ object PrincipalService {
   def make[F[_]: Sync](maybeLocation: Option[Location])(
       keyRepository: KeyProtectionService[F, MacSigningKey[HMACSHA256]])(
       implicit keyGen: SymmetricKeyGen[F, HMACSHA256, MacSigningKey])
-    : PrincipalService[F, EndpointService[F, MacSigningKey[HMACSHA256]]] =
+    : PrincipalService[F, Endpoint[F, MacSigningKey[HMACSHA256]]] =
     Live(maybeLocation)(keyRepository, MacaroonService[F])
 
   def makeInMemory[F[_]: Sync](maybeLocation: Option[Location])(
       implicit keyGen: SymmetricKeyGen[F, HMACSHA256, MacSigningKey])
-    : F[PrincipalService[F, EndpointService[F, MacSigningKey[HMACSHA256]]]] =
+    : F[PrincipalService[F, Endpoint[F, MacSigningKey[HMACSHA256]]]] =
     KeyProtectionService
       .inMemory[F, MacSigningKey[HMACSHA256]]
       .map(make(maybeLocation))

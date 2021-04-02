@@ -37,8 +37,8 @@ object MacaroonIntegrationSuite extends SimpleIOSuite {
         .inMemory[IO, MacSigningKey[HMACSHA256]]
       as = PrincipalService.make(authenticationServiceLocation.some)(
         asRepository)
-      asEndpoint = EndpointService.make(Some(authenticationServiceLocation))(
-        asRepository.protectRootKeyAndPredicate)
+      asEndpoint = Endpoint(Some(authenticationServiceLocation),
+                            asRepository.protectRootKeyAndPredicate)
       m_ts <- ts.assert()
       m_ts <- ts.addFirstPartyCaveat(m_ts, chunkInRange)
       m_ts <- ts.addFirstPartyCaveat(m_ts, opInReadWrite)
