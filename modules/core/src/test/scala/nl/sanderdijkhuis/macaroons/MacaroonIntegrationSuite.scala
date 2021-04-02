@@ -31,10 +31,14 @@ object MacaroonIntegrationSuite extends SimpleIOSuite {
   test("example from paper") {
 
     for {
-      ts <- PrincipalService.makeInMemory(targetServiceLocation.some)
-      fs <- PrincipalService.makeInMemory(forumServiceLocation.some)
+      tsRepository <- KeyProtectionService
+        .inMemory[IO, MacSigningKey[HMACSHA256]]
+      fsRepository <- KeyProtectionService
+        .inMemory[IO, MacSigningKey[HMACSHA256]]
       asRepository <- KeyProtectionService
         .inMemory[IO, MacSigningKey[HMACSHA256]]
+      ts = PrincipalService.make(targetServiceLocation.some)(tsRepository)
+      fs = PrincipalService.make(forumServiceLocation.some)(fsRepository)
       as = PrincipalService.make(authenticationServiceLocation.some)(
         asRepository)
       asEndpoint = Endpoint(Some(authenticationServiceLocation),

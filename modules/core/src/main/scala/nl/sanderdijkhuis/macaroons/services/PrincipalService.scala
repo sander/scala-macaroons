@@ -104,11 +104,4 @@ object PrincipalService {
       implicit keyGen: SymmetricKeyGen[F, HMACSHA256, MacSigningKey])
     : PrincipalService[F, Endpoint[F, MacSigningKey[HMACSHA256]]] =
     Live(maybeLocation)(keyRepository, MacaroonService[F])
-
-  def makeInMemory[F[_]: Sync](maybeLocation: Option[Location])(
-      implicit keyGen: SymmetricKeyGen[F, HMACSHA256, MacSigningKey])
-    : F[PrincipalService[F, Endpoint[F, MacSigningKey[HMACSHA256]]]] =
-    KeyProtectionService
-      .inMemory[F, MacSigningKey[HMACSHA256]]
-      .map(make(maybeLocation))
 }
