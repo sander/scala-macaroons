@@ -1,4 +1,4 @@
-package nl.sanderdijkhuis.macaroons.integration
+package nl.sanderdijkhuis.macaroons.repositories
 
 import cats.data._
 import cats.implicits._

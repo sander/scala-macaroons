@@ -10,9 +10,11 @@ import nl.sanderdijkhuis.macaroons.domain.verification.{
   VerificationResult,
   Verifier
 }
-import nl.sanderdijkhuis.macaroons.integration.KeyRepository
+import nl.sanderdijkhuis.macaroons.repositories.KeyRepository
+import tsec.cipher.symmetric.bouncy.XChaCha20Poly1305
 import tsec.keygen.symmetric.SymmetricKeyGen
 import tsec.mac.jca.{HMACSHA256, MacSigningKey}
+import tsec.cipher.symmetric.{Iv, IvGen}
 
 trait PrincipalService[F[_], ThirdParty] {
 
@@ -22,32 +24,44 @@ trait PrincipalService[F[_], ThirdParty] {
 
   def discharge(identifier: Identifier): F[Option[Macaroon with Authority]]
 
-  def addFirstPartyCaveat(macaroon: Macaroon with Authority,
-                          identifier: Identifier): F[Macaroon with Authority]
+  def addFirstPartyCaveat(
+      macaroon: Macaroon with Authority,
+      identifier: Identifier
+  ): F[Macaroon with Authority]
 
   def addThirdPartyCaveat(
       macaroon: Macaroon with Authority,
       predicate: Predicate,
-      thirdParty: ThirdParty): F[(Macaroon with Authority, Identifier)]
+      thirdParty: ThirdParty
+  ): F[(Macaroon with Authority, Identifier)]
 
-  def verify(macaroon: Macaroon with Authority,
-             verifier: Verifier,
-             dischargeMacaroons: Set[Macaroon]): F[VerificationResult]
+  def verify(
+      macaroon: Macaroon with Authority,
+      verifier: Verifier,
+      dischargeMacaroons: Set[Macaroon]
+  ): F[VerificationResult]
 }
 
 object PrincipalService {
 
-  case class Live[F[_]: Monad, HmacAlgorithm](maybeLocation: Option[Location])(
-      rootKeyRepository: KeyRepository[F,
-                                       Identifier,
-                                       MacSigningKey[HmacAlgorithm]],
-      dischargeKeyRepository: KeyRepository[F,
-                                            Identifier,
-                                            (MacSigningKey[HmacAlgorithm],
-                                             Predicate)],
-      macaroonService: MacaroonService[F, MacSigningKey[HmacAlgorithm]])(
-      implicit keyGen: SymmetricKeyGen[F, HmacAlgorithm, MacSigningKey])
-      extends PrincipalService[F, Endpoint[F, MacSigningKey[HmacAlgorithm]]] {
+  case class Live[F[_]: Monad, HmacAlgorithm, AuthCipher](
+      maybeLocation: Option[Location]
+  )(
+      rootKeyRepository: KeyRepository[F, Identifier, MacSigningKey[
+        HmacAlgorithm
+      ]],
+      dischargeKeyRepository: KeyRepository[
+        F,
+        Identifier,
+        (MacSigningKey[HmacAlgorithm], Predicate)
+      ],
+      macaroonService: MacaroonService[F, MacSigningKey[
+        HmacAlgorithm
+      ], Iv[AuthCipher]]
+  )(implicit
+      keyGen: SymmetricKeyGen[F, HmacAlgorithm, MacSigningKey],
+      ivGen: IvGen[F, AuthCipher]
+  ) extends PrincipalService[F, Endpoint[F, MacSigningKey[HmacAlgorithm]]] {
 
     override def assert(): F[Macaroon with Authority] =
       for {
@@ -57,7 +71,8 @@ object PrincipalService {
       } yield m
 
     override def discharge(
-        identifier: Identifier): F[Option[Macaroon with Authority]] =
+        identifier: Identifier
+    ): F[Option[Macaroon with Authority]] =
       for {
         rootKey <- dischargeKeyRepository
           .recover(identifier)
@@ -76,35 +91,43 @@ object PrincipalService {
 
     override def addFirstPartyCaveat(
         macaroon: Macaroon with Authority,
-        identifier: Identifier): F[Macaroon with Authority] =
+        identifier: Identifier
+    ): F[Macaroon with Authority] =
       macaroonService.addFirstPartyCaveat(macaroon, identifier)
 
     override def addThirdPartyCaveat(
         macaroon: Macaroon with Authority,
         predicate: Predicate,
-        thirdParty: Endpoint[F, MacSigningKey[HmacAlgorithm]])
-      : F[(Macaroon with Authority, Identifier)] =
+        thirdParty: Endpoint[F, MacSigningKey[HmacAlgorithm]]
+    ): F[(Macaroon with Authority, Identifier)] =
       for {
         rootKey <- keyGen.generateKey
         cId <- thirdParty.prepare(rootKey, predicate)
-        m <- macaroonService.addThirdPartyCaveat(macaroon,
-                                                 rootKey,
-                                                 cId,
-                                                 thirdParty.maybeLocation)
+        iv <- ivGen.genIv
+        m <- macaroonService.addThirdPartyCaveat(
+          macaroon,
+          rootKey,
+          iv,
+          cId,
+          thirdParty.maybeLocation
+        )
       } yield (m, cId)
 
     override def verify(
         macaroon: Macaroon with Authority,
         verifier: Verifier,
-        dischargeMacaroons: Set[Macaroon]): F[VerificationResult] =
+        dischargeMacaroons: Set[Macaroon]
+    ): F[VerificationResult] =
       for {
         rootKey <- rootKeyRepository.recover(macaroon.id)
         result <- rootKey match {
           case Some(rootKey) =>
-            macaroonService.verify(macaroon,
-                                   rootKey,
-                                   verifier,
-                                   dischargeMacaroons)
+            macaroonService.verify(
+              macaroon,
+              rootKey,
+              verifier,
+              dischargeMacaroons
+            )
           case None => VerificationFailed.pure[F]
         }
       } yield result
@@ -117,16 +140,23 @@ object PrincipalService {
   }
 
   def make[F[_]: Sync](maybeLocation: Option[Location])(
-      rootKeyRepository: KeyRepository[F,
-                                       Identifier,
-                                       MacSigningKey[HMACSHA256]],
-      dischargeKeyRepository: KeyRepository[F,
-                                            Identifier,
-                                            (MacSigningKey[HMACSHA256],
-                                             Predicate)])(
-      implicit keyGen: SymmetricKeyGen[F, HMACSHA256, MacSigningKey])
-    : PrincipalService[F, Endpoint[F, MacSigningKey[HMACSHA256]]] =
-    Live(maybeLocation)(rootKeyRepository,
-                        dischargeKeyRepository,
-                        MacaroonService[F])
+      rootKeyRepository: KeyRepository[F, Identifier, MacSigningKey[
+        HMACSHA256
+      ]],
+      dischargeKeyRepository: KeyRepository[
+        F,
+        Identifier,
+        (MacSigningKey[HMACSHA256], Predicate)
+      ]
+  )(implicit
+      keyGen: SymmetricKeyGen[F, HMACSHA256, MacSigningKey]
+  ): PrincipalService[F, Endpoint[F, MacSigningKey[HMACSHA256]]] = {
+    implicit val counterStrategy: IvGen[F, XChaCha20Poly1305] =
+      XChaCha20Poly1305.defaultIvGen
+    Live(maybeLocation)(
+      rootKeyRepository,
+      dischargeKeyRepository,
+      MacaroonService[F]
+    )
+  }
 }

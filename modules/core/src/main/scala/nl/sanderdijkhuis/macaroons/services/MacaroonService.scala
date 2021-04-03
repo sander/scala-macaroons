@@ -22,51 +22,61 @@ import tsec.mac.jca.{HMACSHA256, MacSigningKey}
 
 import javax.crypto.spec.SecretKeySpec
 
-/**
-  * Operations for generating and manipulating [[Macaroon]]s.
+/** Operations for generating and manipulating [[Macaroon]]s.
   */
-trait MacaroonService[F[_], RootKey] {
+trait MacaroonService[F[_], RootKey, InitializationVector] {
 
-  def generate(identifier: Identifier,
-               rootKey: RootKey,
-               maybeLocation: Option[Location]): F[Macaroon with Authority]
+  def generate(
+      identifier: Identifier,
+      rootKey: RootKey,
+      maybeLocation: Option[Location]
+  ): F[Macaroon with Authority]
 
-  def bind(authorizing: Macaroon with Authority,
-           discharging: Macaroon): F[Macaroon]
+  def bind(
+      authorizing: Macaroon with Authority,
+      discharging: Macaroon
+  ): F[Macaroon]
 
-  def addFirstPartyCaveat(macaroon: Macaroon with Authority,
-                          identifier: Identifier): F[Macaroon with Authority]
+  def addFirstPartyCaveat(
+      macaroon: Macaroon with Authority,
+      identifier: Identifier
+  ): F[Macaroon with Authority]
 
   def addThirdPartyCaveat(
       macaroon: Macaroon with Authority,
       key: RootKey,
+      initializationVector: InitializationVector,
       identifier: Identifier,
-      maybeLocation: Option[Location]): F[Macaroon with Authority]
+      maybeLocation: Option[Location]
+  ): F[Macaroon with Authority]
 
-  def verify(macaroon: Macaroon with Authority,
-             key: RootKey,
-             verifier: Verifier,
-             Ms: Set[Macaroon]): F[VerificationResult]
+  def verify(
+      macaroon: Macaroon with Authority,
+      key: RootKey,
+      verifier: Verifier,
+      Ms: Set[Macaroon]
+  ): F[VerificationResult]
 }
 
 object MacaroonService {
 
-  class TsecLive[F[_]: Monad,
-                 HashAlgorithm,
-                 HmacAlgorithm,
-                 AuthCipher,
-                 AuthCipherSecretKey[_]](nonceSize: Int)(
-      implicit val hasher: CryptoHasher[F, HashAlgorithm],
+  class TsecLive[F[
+      _
+  ]: Monad, HashAlgorithm, HmacAlgorithm, AuthCipher, AuthCipherSecretKey[_]](
+      nonceSize: Int
+  )(implicit
+      val hasher: CryptoHasher[F, HashAlgorithm],
       mac: MessageAuth[F, HmacAlgorithm, MacSigningKey],
-      counterStrategy: IvGen[F, AuthCipher],
+//      counterStrategy: IvGen[F, AuthCipher],
       encryptor: AuthEncryptor[F, AuthCipher, AuthCipherSecretKey],
       authCipherAPI: AuthCipherAPI[AuthCipher, AuthCipherSecretKey],
       encryptionKeyGen: SymmetricKeyGen[F, AuthCipher, AuthCipherSecretKey],
-      macKeyGen: SymmetricKeyGen[F, HmacAlgorithm, MacSigningKey])
-      extends MacaroonService[F, MacSigningKey[HmacAlgorithm]] {
+      macKeyGen: SymmetricKeyGen[F, HmacAlgorithm, MacSigningKey]
+  ) extends MacaroonService[F, MacSigningKey[HmacAlgorithm], Iv[AuthCipher]] {
 
     private def unsafeNonEmptyByteVector(
-        byteVector: ByteVector): F[NonEmptyByteVector] =
+        byteVector: ByteVector
+    ): F[NonEmptyByteVector] =
       refineV[NonEmpty].unsafeFrom(byteVector).pure[F]
 
     private def hash(byteVector: ByteVector): F[NonEmptyByteVector] =
@@ -75,13 +85,17 @@ object MacaroonService {
         b <- unsafeNonEmptyByteVector(a)
       } yield b
 
-    private def bind(authorizing: Macaroon with Authority,
-                     dischargingTag: AuthenticationTag): F[AuthenticationTag] =
+    private def bind(
+        authorizing: Macaroon with Authority,
+        dischargingTag: AuthenticationTag
+    ): F[AuthenticationTag] =
       hash(dischargingTag.value ++ authorizing.tag.value)
         .map(AuthenticationTag.apply)
 
-    def bind(authorizing: Macaroon with Authority,
-             discharging: Macaroon): F[Macaroon] =
+    def bind(
+        authorizing: Macaroon with Authority,
+        discharging: Macaroon
+    ): F[Macaroon] =
       bind(authorizing, discharging.tag).map(t => discharging.copy(tag = t))
 
     private def toKey(byteVector: ByteVector): MacSigningKey[HmacAlgorithm] =
@@ -89,7 +103,8 @@ object MacaroonService {
 
     private def authenticate(
         data: ByteVector,
-        key: MacSigningKey[HmacAlgorithm]): F[AuthenticationTag] =
+        key: MacSigningKey[HmacAlgorithm]
+    ): F[AuthenticationTag] =
       mac
         .sign(data.toArray, key)
         .map(ByteVector(_))
@@ -99,8 +114,10 @@ object MacaroonService {
     private def authenticateCaveat(
         tag: AuthenticationTag,
         maybeChallenge: Option[Challenge],
-        identifier: Identifier): F[AuthenticationTag] = {
-      val data = maybeChallenge.fold(ByteVector.empty)(_.value) ++ identifier.value
+        identifier: Identifier
+    ): F[AuthenticationTag] = {
+      val data =
+        maybeChallenge.fold(ByteVector.empty)(_.value) ++ identifier.value
       authenticate(data, toKey(tag.value))
     }
 
@@ -108,61 +125,79 @@ object MacaroonService {
         macaroon: Macaroon with Authority,
         identifier: Identifier,
         maybeVerificationKeyId: Option[Challenge],
-        maybeLocation: Option[Location]): F[Macaroon with Authority] = {
-      val caveats = macaroon.caveats :+ Caveat(maybeLocation,
-                                               identifier,
-                                               maybeVerificationKeyId)
+        maybeLocation: Option[Location]
+    ): F[Macaroon with Authority] = {
+      val caveats = macaroon.caveats :+ Caveat(
+        maybeLocation,
+        identifier,
+        maybeVerificationKeyId
+      )
       authenticateCaveat(macaroon.tag, maybeVerificationKeyId, identifier)
         .map(tag => macaroon.copy(caveats = caveats, tag = tag))
         .map(_.asInstanceOf[Macaroon with Authority])
     }
 
-    def generate(identifier: Identifier,
-                 rootKey: MacSigningKey[HmacAlgorithm],
-                 maybeLocation: Option[Location]): F[Macaroon with Authority] =
-      authenticate(identifier.value, rootKey).map(
-        tag =>
-          Macaroon(maybeLocation, identifier, Vector.empty, tag)
-            .asInstanceOf[Macaroon with Authority])
+    def generate(
+        identifier: Identifier,
+        rootKey: MacSigningKey[HmacAlgorithm],
+        maybeLocation: Option[Location]
+    ): F[Macaroon with Authority] =
+      authenticate(identifier.value, rootKey).map(tag =>
+        Macaroon(maybeLocation, identifier, Vector.empty, tag)
+          .asInstanceOf[Macaroon with Authority]
+      )
 
     def addFirstPartyCaveat(
         macaroon: Macaroon with Authority,
-        identifier: Identifier): F[Macaroon with Authority] =
+        identifier: Identifier
+    ): F[Macaroon with Authority] =
       addCaveatHelper(macaroon, identifier, None, None)
 
     def addThirdPartyCaveat(
         macaroon: Macaroon with Authority,
         key: MacSigningKey[HmacAlgorithm],
+        initializationVector: Iv[AuthCipher],
         identifier: Identifier,
-        maybeLocation: Option[Location]): F[Macaroon with Authority] =
+        maybeLocation: Option[Location]
+    ): F[Macaroon with Authority] =
       for {
         k <- encryptionKeyGen.build(macaroon.tag.value.toArray)
         t = PlainText(key.toJavaKey.getEncoded)
-        e <- authCipherAPI.encrypt[F](t, k)
+        e <- authCipherAPI.encrypt[F](t, k, initializationVector)
         c = Challenge(
-          refineV[NonEmpty].unsafeFrom(ByteVector(e.toConcatenated)))
+          refineV[NonEmpty].unsafeFrom(ByteVector(e.toConcatenated))
+        )
         m <- addCaveatHelper(macaroon, identifier, Some(c), maybeLocation)
       } yield m
 
-    def decrypt(tag: AuthenticationTag,
-                challenge: Challenge): F[MacSigningKey[HmacAlgorithm]] =
+    def decrypt(
+        tag: AuthenticationTag,
+        challenge: Challenge
+    ): F[MacSigningKey[HmacAlgorithm]] =
       for {
         k <- encryptionKeyGen.build(tag.value.toArray)
         (content, nonce) = challenge.value.splitAt(
-          challenge.value.length - nonceSize)
-        c = CipherText[AuthCipher](RawCipherText(content.toArray),
-                                   Iv(nonce.toArray))
+          challenge.value.length - nonceSize
+        )
+        c = CipherText[AuthCipher](
+          RawCipherText(content.toArray),
+          Iv(nonce.toArray)
+        )
         d <- authCipherAPI.decrypt(c, k)
         key <- macKeyGen.build(d)
       } yield key
 
-    def verify(macaroon: Macaroon with Authority,
-               key: MacSigningKey[HmacAlgorithm],
-               verifier: Verifier,
-               macaroons: Set[Macaroon]): F[VerificationResult] = {
+    def verify(
+        macaroon: Macaroon with Authority,
+        key: MacSigningKey[HmacAlgorithm],
+        verifier: Verifier,
+        macaroons: Set[Macaroon]
+    ): F[VerificationResult] = {
 
-      def helper(discharge: Option[Macaroon],
-                 k: MacSigningKey[HmacAlgorithm]): F[Boolean] = {
+      def helper(
+          discharge: Option[Macaroon],
+          k: MacSigningKey[HmacAlgorithm]
+      ): F[Boolean] = {
         val M = discharge.getOrElse(macaroon)
 
         val tags = M.caveats.scanLeft(authenticate(M.id.value, k)) {
@@ -184,7 +219,8 @@ object MacaroonService {
           })
           .map(!_.contains(false))
         val tag = OptionT(tags.lastOption.sequence).semiflatMap(last =>
-          discharge.fold(last.pure[F])(_ => bind(macaroon, last)))
+          discharge.fold(last.pure[F])(_ => bind(macaroon, last))
+        )
         val tagValidates = tag.map(_ == M.tag).getOrElse(false)
         (verifications, tagValidates).mapN((a, b) => a && b)
       }
@@ -194,13 +230,13 @@ object MacaroonService {
   }
 
   type RootKey = MacSigningKey[HMACSHA256]
+  type InitializationVector = Iv[XChaCha20Poly1305]
 
-  def apply[F[_]: Sync]: MacaroonService[F, RootKey] = {
-    implicit val counterStrategy: IvGen[F, XChaCha20Poly1305] =
-      XChaCha20Poly1305.defaultIvGen
+  def apply[F[_]: Sync]: MacaroonService[F, RootKey, InitializationVector] = {
     implicit val authCipherAPI
-      : AuthCipherAPI[XChaCha20Poly1305, BouncySecretKey] = XChaCha20Poly1305
+        : AuthCipherAPI[XChaCha20Poly1305, BouncySecretKey] = XChaCha20Poly1305
     new TsecLive[F, SHA256, HMACSHA256, XChaCha20Poly1305, BouncySecretKey](
-      XChaCha20Poly1305.nonceSize)
+      XChaCha20Poly1305.nonceSize
+    )
   }
 }
