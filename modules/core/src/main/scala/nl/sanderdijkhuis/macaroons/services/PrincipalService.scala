@@ -44,7 +44,7 @@ trait PrincipalService[F[_], ThirdParty] {
 
 object PrincipalService {
 
-  case class Live[F[_]: Monad, HmacAlgorithm, AuthCipher](
+  case class Live[F[_], HmacAlgorithm, AuthCipher](
       maybeLocation: Option[Location]
   )(
       rootKeyRepository: KeyRepository[F, Identifier, MacSigningKey[
@@ -59,6 +59,7 @@ object PrincipalService {
         HmacAlgorithm
       ], Iv[AuthCipher]]
   )(implicit
+      M: MonadError[F, MacaroonService.Error],
       keyGen: SymmetricKeyGen[F, HmacAlgorithm, MacSigningKey],
       ivGen: IvGen[F, AuthCipher]
   ) extends PrincipalService[F, Endpoint[F, MacSigningKey[HmacAlgorithm]]] {
@@ -153,6 +154,25 @@ object PrincipalService {
   ): PrincipalService[F, Endpoint[F, MacSigningKey[HMACSHA256]]] = {
     implicit val counterStrategy: IvGen[F, XChaCha20Poly1305] =
       XChaCha20Poly1305.defaultIvGen
+    implicit val error: MonadError[F, MacaroonService.Error] =
+      new MonadError[F, MacaroonService.Error] {
+        override def flatMap[A, B](fa: F[A])(f: A => F[B]): F[B] =
+          Sync[F].flatMap(fa)(f)
+
+        override def tailRecM[A, B](a: A)(f: A => F[Either[A, B]]): F[B] =
+          Sync[F].tailRecM(a)(f)
+
+        override def raiseError[A](e: MacaroonService.Error): F[A] =
+          Sync[F].raiseError(new Throwable(e.toString))
+
+        override def handleErrorWith[A](fa: F[A])(
+            f: MacaroonService.Error => F[A]
+        ): F[A] = Sync[F].handleErrorWith(fa)(t =>
+          f(MacaroonService.KeyGenError(t.getMessage)) // TODO
+        )
+
+        override def pure[A](x: A): F[A] = Sync[F].pure(x)
+      }
     Live(maybeLocation)(
       rootKeyRepository,
       dischargeKeyRepository,

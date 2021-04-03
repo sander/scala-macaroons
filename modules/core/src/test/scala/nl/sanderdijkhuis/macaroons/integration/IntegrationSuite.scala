@@ -1,5 +1,6 @@
 package nl.sanderdijkhuis.macaroons.integration
 
+import cats.MonadError
 import cats.data._
 import cats.effect._
 import cats.implicits._
@@ -22,6 +23,24 @@ import weaver._
 object IntegrationSuite extends SimpleIOSuite {
 
   import TestData._
+
+  implicit def err[F[_]: Sync]: MonadError[F, MacaroonService.Error] =
+    new MonadError[F, MacaroonService.Error] {
+      override def flatMap[A, B](fa: F[A])(f: A => F[B]): F[B] =
+        Sync[F].flatMap(fa)(f)
+
+      override def tailRecM[A, B](a: A)(f: A => F[Either[A, B]]): F[B] =
+        Sync[F].tailRecM(a)(f)
+
+      override def raiseError[A](e: MacaroonService.Error): F[A] =
+        Sync[F].raiseError(new Throwable(e.getMessage))
+
+      override def handleErrorWith[A](fa: F[A])(
+          f: MacaroonService.Error => F[A]
+      ): F[A] = ???
+
+      override def pure[A](x: A): F[A] = Sync[F].pure(x)
+    }
 
   test("example from paper") {
     (for {
