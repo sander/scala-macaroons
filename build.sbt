@@ -17,7 +17,6 @@ lazy val core = (project in file("modules/core")).settings(
     "eu.timepit" %% "refined-cats" % refinedVersion,
     "eu.timepit" %% "refined-scodec" % refinedVersion,
     "eu.timepit" %% "refined-shapeless" % refinedVersion,
-    "co.fs2" %% "fs2-core" % "2.5.0",
     "io.estatico" %% "newtype" % "0.4.4",
     "org.scodec" %% "scodec-bits" % "1.1.24",
     "org.scodec" %% "scodec-core" % "1.11.7",
