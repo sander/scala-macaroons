@@ -4,6 +4,7 @@ import cats._
 import cats.data._
 import cats.effect._
 import cats.implicits._
+import eu.timepit.refined.api.RefType
 import eu.timepit.refined.api.RefType.refinedRefType
 import eu.timepit.refined.auto._
 import eu.timepit.refined.collection._
@@ -56,7 +57,8 @@ object MacaroonService {
       F[_], HashAlgorithm, HmacAlgorithm, AuthCipher, AuthCipherSecretKey[_]]
       extends MacaroonService[F, MacSigningKey[HmacAlgorithm]] {
 
-    implicit val sync: Sync[F]
+    implicit val monad: Monad[F]
+    implicit val compiler: Stream.Compiler[F, F]
     implicit val hasher: CryptoHasher[F, HashAlgorithm]
     implicit val mac: MessageAuth[F, HmacAlgorithm, MacSigningKey]
     implicit val counterStrategy: IvGen[F, AuthCipher]
@@ -67,16 +69,14 @@ object MacaroonService {
                                                    AuthCipherSecretKey]
     implicit val macKeyGen: SymmetricKeyGen[F, HmacAlgorithm, MacSigningKey]
 
-    private def nonEmptyByteVector(
-        byteVector: ByteVector): F[NonEmptyByteVector] = {
-      val x: Either[String, NonEmptyByteVector] = refineV(byteVector)
-      Sync[F].fromEither(x.leftMap(new Exception(_)))
-    }
+    private def unsafeNonEmptyByteVector(
+        byteVector: ByteVector): F[NonEmptyByteVector] =
+      refineV[NonEmpty].unsafeFrom(byteVector).pure[F]
 
     private def hash(byteVector: ByteVector): F[NonEmptyByteVector] = {
       for {
         a <- hasher.hash(byteVector.toArray).map(ByteVector.apply)
-        b <- nonEmptyByteVector(a)
+        b <- unsafeNonEmptyByteVector(a)
       } yield b
     }
 
@@ -98,7 +98,7 @@ object MacaroonService {
       mac
         .sign(data.toArray, key)
         .map(ByteVector(_))
-        .flatMap(nonEmptyByteVector)
+        .flatMap(unsafeNonEmptyByteVector)
         .map(AuthenticationTag.apply)
 
     private def authenticateCaveat(
@@ -144,11 +144,8 @@ object MacaroonService {
         k <- encryptionKeyGen.build(macaroon.tag.value.toArray)
         t = PlainText(key.toJavaKey.getEncoded)
         e <- authCipherAPI.encrypt[F](t, k)
-        c <- Sync[F]
-          .fromEither(
-            refineV[NonEmpty](ByteVector(e.toConcatenated))
-              .leftMap(new Throwable(_)))
-          .map(Challenge.apply)
+        c = Challenge(
+          refineV[NonEmpty].unsafeFrom(ByteVector(e.toConcatenated)))
         m <- addCaveatHelper(macaroon, identifier, Some(c), maybeLocation)
       } yield m
 
@@ -179,15 +176,16 @@ object MacaroonService {
             authenticateCaveat(cSig, c.maybeChallenge, c.identifier))
         } yield tag
         val verifications = caveats.zip(tags).evalMap {
-          case (Caveat(_, cId, None), _) => verifier(cId).isVerified.pure[F]
+          case (Caveat(_, cId, None), _) =>
+            verifier(cId).isVerified.pure[F](monad)
           case (Caveat(_, id, Some(vId)), cSig) =>
             decrypt(cSig, vId).flatMap(key =>
-              Ms.filter(_.id == id).evalMap(m => helper(m.some, key)).some)
+              Ms.filter(_.id == id).evalMap(m => helper(m.some, key)).someTrue)
         }
         val tag = OptionT(tags.compile.last).semiflatMap(last =>
           discharge.fold(last.pure[F])(_ => bind(macaroon, last)))
         val tagValidates = tag.map(_ == M.tag).getOrElse(false)
-        verifications.all && tagValidates
+        verifications.allTrue && tagValidates
       }
 
       helper(None, key).map(VerificationResult.from)
@@ -197,15 +195,16 @@ object MacaroonService {
   implicit class EffectOps[F[_]: Monad](aF: F[Boolean]) {
     def &&(bF: F[Boolean]): F[Boolean] = aF.flatMap(a => bF.map(b => a && b))
   }
-  implicit class StreamOps[F[_]: Sync](s: Stream[F, Boolean]) {
-    def all: F[Boolean] =
+  implicit class StreamOps[F[_]: Monad](s: Stream[F, Boolean])(
+      implicit compiler: Stream.Compiler[F, F]) {
+    def allTrue: F[Boolean] =
       s.forall(v => v).compile.toList.map(_ == List(true))
-    def some: F[Boolean] =
+    def someTrue: F[Boolean] =
       s.filter(v => v).head.compile.last.map(_.isDefined)
   }
 
   class Live[F[_]]()(
-      implicit override val sync: Sync[F],
+      implicit override val monad: Sync[F],
   ) extends TsecLive[F,
                        SHA256,
                        HMACSHA256,
@@ -227,8 +226,11 @@ object MacaroonService {
       XChaCha20Poly1305.defaultKeyGen
     override implicit val macKeyGen
       : SymmetricKeyGen[F, HMACSHA256, MacSigningKey] = HMACSHA256.genKeyMac
+    override implicit val compiler: Stream.Compiler[F, F] =
+      Stream.Compiler.syncInstance
   }
 
-  def apply[F[_]: Sync]: MacaroonService[F, MacSigningKey[HMACSHA256]] =
-    new Live()
+  type RootKey = MacSigningKey[HMACSHA256]
+
+  def apply[F[_]: Sync]: MacaroonService[F, RootKey] = new Live()
 }
