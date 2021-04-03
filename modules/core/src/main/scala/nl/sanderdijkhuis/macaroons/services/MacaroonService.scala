@@ -51,20 +51,19 @@ trait MacaroonService[F[_], RootKey] {
 
 object MacaroonService {
 
-  trait TsecLive[
-      F[_], HashAlgorithm, HmacAlgorithm, AuthCipher, AuthCipherSecretKey[_]]
+  class TsecLive[F[_]: Monad,
+                 HashAlgorithm,
+                 HmacAlgorithm,
+                 AuthCipher,
+                 AuthCipherSecretKey[_]]()(
+      implicit val hasher: CryptoHasher[F, HashAlgorithm],
+      mac: MessageAuth[F, HmacAlgorithm, MacSigningKey],
+      counterStrategy: IvGen[F, AuthCipher],
+      encryptor: AuthEncryptor[F, AuthCipher, AuthCipherSecretKey],
+      authCipherAPI: AuthCipherAPI[AuthCipher, AuthCipherSecretKey],
+      encryptionKeyGen: SymmetricKeyGen[F, AuthCipher, AuthCipherSecretKey],
+      macKeyGen: SymmetricKeyGen[F, HmacAlgorithm, MacSigningKey])
       extends MacaroonService[F, MacSigningKey[HmacAlgorithm]] {
-
-    implicit val monad: Monad[F]
-    implicit val hasher: CryptoHasher[F, HashAlgorithm]
-    implicit val mac: MessageAuth[F, HmacAlgorithm, MacSigningKey]
-    implicit val counterStrategy: IvGen[F, AuthCipher]
-    implicit val encryptor: AuthEncryptor[F, AuthCipher, AuthCipherSecretKey]
-    implicit val authCipherAPI: AuthCipherAPI[AuthCipher, AuthCipherSecretKey]
-    implicit val encryptionKeyGen: SymmetricKeyGen[F,
-                                                   AuthCipher,
-                                                   AuthCipherSecretKey]
-    implicit val macKeyGen: SymmetricKeyGen[F, HmacAlgorithm, MacSigningKey]
 
     private def unsafeNonEmptyByteVector(
         byteVector: ByteVector): F[NonEmptyByteVector] =
@@ -172,8 +171,7 @@ object MacaroonService {
         val verifications = tags.sequence
           .map(_.zip(M.caveats))
           .flatMap(_.traverse {
-            case (_, Caveat(_, cId, None)) =>
-              verifier(cId).isVerified.pure[F](monad)
+            case (_, Caveat(_, cId, None)) => verifier(cId).isVerified.pure[F]
             case (cSig, Caveat(_, id, Some(vId))) =>
               decrypt(cSig, vId).flatMap { key =>
                 macaroons
@@ -194,32 +192,13 @@ object MacaroonService {
     }
   }
 
-  class Live[F[_]]()(
-      implicit override val monad: Sync[F],
-  ) extends TsecLive[F,
-                       SHA256,
-                       HMACSHA256,
-                       XChaCha20Poly1305,
-                       BouncySecretKey] {
-    override val hasher: CryptoHasher[F, SHA256] =
-      implicitly[CryptoHasher[F, SHA256]]
-    override val mac: MessageAuth[F, HMACSHA256, MacSigningKey] =
-      implicitly[MessageAuth[F, HMACSHA256, MacSigningKey]]
-    override val counterStrategy: IvGen[F, XChaCha20Poly1305] =
-      XChaCha20Poly1305.defaultIvGen
-    override val encryptor
-      : AuthEncryptor[F, XChaCha20Poly1305, BouncySecretKey] =
-      implicitly[AuthEncryptor[F, XChaCha20Poly1305, BouncySecretKey]]
-    override val authCipherAPI
-      : AuthCipherAPI[XChaCha20Poly1305, BouncySecretKey] = XChaCha20Poly1305
-    override val encryptionKeyGen
-      : SymmetricKeyGen[F, XChaCha20Poly1305, BouncySecretKey] =
-      XChaCha20Poly1305.defaultKeyGen
-    override implicit val macKeyGen
-      : SymmetricKeyGen[F, HMACSHA256, MacSigningKey] = HMACSHA256.genKeyMac
-  }
-
   type RootKey = MacSigningKey[HMACSHA256]
 
-  def apply[F[_]: Sync]: MacaroonService[F, RootKey] = new Live()
+  def apply[F[_]: Sync]: MacaroonService[F, RootKey] = {
+    implicit val counterStrategy: IvGen[F, XChaCha20Poly1305] =
+      XChaCha20Poly1305.defaultIvGen
+    implicit val authCipherAPI
+      : AuthCipherAPI[XChaCha20Poly1305, BouncySecretKey] = XChaCha20Poly1305
+    new TsecLive[F, SHA256, HMACSHA256, XChaCha20Poly1305, BouncySecretKey]
+  }
 }
