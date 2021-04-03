@@ -17,8 +17,8 @@ import tsec.cipher.symmetric.bouncy.{BouncySecretKey, XChaCha20Poly1305}
 import tsec.hashing.CryptoHasher
 import tsec.hashing.jca.SHA256
 import tsec.keygen.symmetric.SymmetricKeyGen
-import tsec.mac.MessageAuth
-import tsec.mac.jca.{HMACSHA256, MacSigningKey}
+import tsec.mac.{MAC, MessageAuth}
+import tsec.mac.jca.{HMACSHA256, MacErrorM, MacSigningKey}
 
 import javax.crypto.spec.SecretKeySpec
 
@@ -67,7 +67,6 @@ object MacaroonService {
   )(implicit
       val hasher: CryptoHasher[F, HashAlgorithm],
       mac: MessageAuth[F, HmacAlgorithm, MacSigningKey],
-//      counterStrategy: IvGen[F, AuthCipher],
       encryptor: AuthEncryptor[F, AuthCipher, AuthCipherSecretKey],
       authCipherAPI: AuthCipherAPI[AuthCipher, AuthCipherSecretKey],
       encryptionKeyGen: SymmetricKeyGen[F, AuthCipher, AuthCipherSecretKey],
@@ -231,6 +230,26 @@ object MacaroonService {
 
   type RootKey = MacSigningKey[HMACSHA256]
   type InitializationVector = Iv[XChaCha20Poly1305]
+
+  implicit def messageAuth[F[_]: Monad, HmacAlgorithm](implicit
+      original: MessageAuth[MacErrorM, HmacAlgorithm, MacSigningKey]
+  ): MessageAuth[F, HmacAlgorithm, MacSigningKey] = {
+    val fk: MacErrorM ~> F = λ[MacErrorM ~> F](s => s.toOption.get.pure[F])
+    new MessageAuth[F, HmacAlgorithm, MacSigningKey] {
+      def algorithm: String = original.algorithm
+
+      def sign(
+          in: Array[Byte],
+          key: MacSigningKey[HmacAlgorithm]
+      ): F[MAC[HmacAlgorithm]] = fk(original.sign(in, key))
+
+      def verifyBool(
+          in: Array[Byte],
+          hashed: MAC[HmacAlgorithm],
+          key: MacSigningKey[HmacAlgorithm]
+      ): F[Boolean] = fk(original.verifyBool(in, hashed, key))
+    }
+  }
 
   def apply[F[_]: Sync]: MacaroonService[F, RootKey, InitializationVector] = {
     implicit val authCipherAPI
