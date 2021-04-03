@@ -55,7 +55,7 @@ object MacaroonService {
                  HashAlgorithm,
                  HmacAlgorithm,
                  AuthCipher,
-                 AuthCipherSecretKey[_]]()(
+                 AuthCipherSecretKey[_]](nonceSize: Int)(
       implicit val hasher: CryptoHasher[F, HashAlgorithm],
       mac: MessageAuth[F, HmacAlgorithm, MacSigningKey],
       counterStrategy: IvGen[F, AuthCipher],
@@ -148,7 +148,8 @@ object MacaroonService {
                 challenge: Challenge): F[MacSigningKey[HmacAlgorithm]] =
       for {
         k <- encryptionKeyGen.build(tag.value.toArray)
-        (content, nonce) = challenge.value.splitAt(challenge.value.length - 24) // TODO
+        (content, nonce) = challenge.value.splitAt(
+          challenge.value.length - nonceSize)
         c = CipherText[AuthCipher](RawCipherText(content.toArray),
                                    Iv(nonce.toArray))
         d <- authCipherAPI.decrypt(c, k)
@@ -199,6 +200,7 @@ object MacaroonService {
       XChaCha20Poly1305.defaultIvGen
     implicit val authCipherAPI
       : AuthCipherAPI[XChaCha20Poly1305, BouncySecretKey] = XChaCha20Poly1305
-    new TsecLive[F, SHA256, HMACSHA256, XChaCha20Poly1305, BouncySecretKey]
+    new TsecLive[F, SHA256, HMACSHA256, XChaCha20Poly1305, BouncySecretKey](
+      XChaCha20Poly1305.nonceSize)
   }
 }
