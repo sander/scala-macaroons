@@ -28,7 +28,7 @@ object IntegrationSuite extends SimpleIOSuite {
   type F[A] = Either[E, A]
 
   pureTest("example from paper") {
-    val program: StateT[F, TestState, Boolean] = for {
+    val program: StateT[F, TestState, VerificationResult] = for {
       m_ts <- ts.assert()
       m_ts <- ts.addFirstPartyCaveat(m_ts, chunkInRange)
       m_ts <- ts.addFirstPartyCaveat(m_ts, opInReadWrite)
@@ -58,8 +58,8 @@ object IntegrationSuite extends SimpleIOSuite {
               ipMatch).contains(p)),
         Set(m_as_sealed)
       )
-    } yield result == Verified
-    assert(program.runA(TestState()).contains(true))
+    } yield result
+    assert(program.runA(TestState()).contains(Verified))
   }
 
   //noinspection TypeAnnotation
