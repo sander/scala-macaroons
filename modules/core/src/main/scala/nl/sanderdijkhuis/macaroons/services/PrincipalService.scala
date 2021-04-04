@@ -120,7 +120,7 @@ object PrincipalService {
       }
   }
 
-  def make[F[_]: Sync](maybeLocation: Option[Location])(
+  def make[F[_], E >: CryptographyError](maybeLocation: Option[Location])(
       rootKeyRepository: KeyRepository[F, Identifier, MacSigningKey[
         HMACSHA256]],
       dischargeKeyRepository: KeyRepository[
@@ -128,15 +128,12 @@ object PrincipalService {
         Identifier,
         (MacSigningKey[HMACSHA256], Predicate)],
       generateKey: F[MacSigningKey[HMACSHA256]],
-      generateIv: F[Iv[XChaCha20Poly1305]])
-      : PrincipalService[F, Endpoint[F, MacSigningKey[HMACSHA256]]] = {
-    implicit val counterStrategy: IvGen[F, XChaCha20Poly1305] =
-      XChaCha20Poly1305.defaultIvGen
-    Live[F, HMACSHA256, XChaCha20Poly1305, Throwable](maybeLocation)(
+      generateIv: F[Iv[XChaCha20Poly1305]])(implicit F: MonadError[F, E])
+      : PrincipalService[F, Endpoint[F, MacSigningKey[HMACSHA256]]] =
+    Live[F, HMACSHA256, XChaCha20Poly1305, E](maybeLocation)(
       rootKeyRepository,
       dischargeKeyRepository,
-      MacaroonService[F, Throwable],
+      MacaroonService[F, E],
       generateKey,
       generateIv)
-  }
 }

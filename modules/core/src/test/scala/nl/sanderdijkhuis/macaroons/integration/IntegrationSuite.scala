@@ -124,7 +124,7 @@ object IntegrationSuite extends SimpleIOSuite {
         generateIdInState)
 
     private def principal(id: PrincipalId, maybeLocation: Option[Location]) =
-      PrincipalService.make(maybeLocation)(
+      PrincipalService.make[StateT[IO, TestState, *], Throwable](maybeLocation)(
         rootKeyRepository(id),
         dischargeKeyRepository(id),
         StateT((s: TestState) => HMACSHA256.generateKey[IO].map(k => (s, k))),
