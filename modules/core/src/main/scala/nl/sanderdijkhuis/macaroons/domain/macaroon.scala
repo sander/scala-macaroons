@@ -17,39 +17,41 @@ object macaroon {
   trait Authority
 
   // TODO could have more precise type
-  @newtype case class AuthenticationTag(value: NonEmptyByteVector)
+  @newtype
+  case class AuthenticationTag(value: NonEmptyByteVector)
 
-  @newtype case class Identifier(value: NonEmptyByteVector)
+  @newtype
+  case class Identifier(value: NonEmptyByteVector)
+
   object Identifier {
 
-    def from(string: NonEmptyString): Identifier =
-      ByteVector
-        .encodeUtf8(string)
-        .toOption
-        .flatMap(v => refineV[NonEmpty](v).toOption)
-        .get
-        .pipe(Identifier.apply)
+    def from(string: NonEmptyString): Identifier = ByteVector.encodeUtf8(string)
+      .toOption.flatMap(v => refineV[NonEmpty](v).toOption).get
+      .pipe(Identifier.apply)
   }
 
   // TODO apply more
-  @newtype case class Predicate(identifier: Identifier)
+  @newtype
+  case class Predicate(identifier: Identifier)
 
-  @newtype case class Challenge(value: NonEmptyByteVector)
+  @newtype
+  case class Challenge(value: NonEmptyByteVector)
 
-  @newtype case class Location(value: NonEmptyString)
+  @newtype
+  case class Location(value: NonEmptyString)
 
-  case class Caveat(maybeLocation: Option[Location],
-                    identifier: Identifier,
-                    maybeChallenge: Option[Challenge])
+  case class Caveat(
+      maybeLocation: Option[Location],
+      identifier: Identifier,
+      maybeChallenge: Option[Challenge])
 
-  case class Macaroon(maybeLocation: Option[Location],
-                      id: Identifier,
-                      caveats: Vector[Caveat],
-                      tag: AuthenticationTag)
+  case class Macaroon(
+      maybeLocation: Option[Location],
+      id: Identifier,
+      caveats: Vector[Caveat],
+      tag: AuthenticationTag)
 
-  /**
-    * Represents a remote principal.
-    */
+  /** Represents a remote principal. */
   case class Endpoint[F[_], RootKey](
       maybeLocation: Option[Location],
       prepare: (RootKey, Predicate) => F[Identifier])

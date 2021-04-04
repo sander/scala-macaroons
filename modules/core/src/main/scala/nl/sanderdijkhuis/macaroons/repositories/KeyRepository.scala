@@ -6,8 +6,7 @@ import cats.tagless._
 import cats._
 import monocle.Lens
 
-@finalAlg
-@autoFunctorK
+@finalAlg @autoFunctorK
 trait KeyRepository[F[_], Identifier, Key] {
 
   def protect(key: Key): F[Identifier]
@@ -17,20 +16,22 @@ trait KeyRepository[F[_], Identifier, Key] {
 
 object KeyRepository {
 
-  private class InMemory[S, I, K](val lens: Lens[S, Map[I, K]],
-                                  val id: State[S, I])
+  private class InMemory[S, I, K](
+      val lens: Lens[S, Map[I, K]],
+      val id: State[S, I])
       extends KeyRepository[State[S, *], I, K] {
 
-    def protect(key: K): State[S, I] = id.transform {
-      case (s, id) => (lens.modify(m => m + (id -> key))(s), id)
+    def protect(key: K): State[S, I] = id.transform { case (s, id) =>
+      (lens.modify(m => m + (id -> key))(s), id)
     }
 
     def recover(identifier: I): State[S, Option[K]] =
       State(s => (s, lens.get(s).get(identifier)))
   }
 
-  def inMemory[S, I, K](lens: Lens[S, Map[I, K]],
-                        id: State[S, I]): KeyRepository[State[S, *], I, K] =
+  def inMemory[S, I, K](
+      lens: Lens[S, Map[I, K]],
+      id: State[S, I]): KeyRepository[State[S, *], I, K] =
     new InMemory(lens, id)
 
   private def functorK[F[_]: Applicative, S]: State[S, *] ~> StateT[F, S, *] =
