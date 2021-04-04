@@ -4,6 +4,9 @@ import cats._
 import cats.data._
 import cats.effect._
 import cats.implicits._
+import nl.sanderdijkhuis.macaroons.cryptography.util.{
+  CryptographyError, KeyGenError
+}
 import nl.sanderdijkhuis.macaroons.domain.macaroon._
 import nl.sanderdijkhuis.macaroons.domain.verification.{
   VerificationFailed, VerificationResult, Verifier
@@ -49,7 +52,7 @@ object PrincipalService {
         (MacSigningKey[HmacAlgorithm], Predicate)],
       macaroonService: MacaroonService[F, MacSigningKey[HmacAlgorithm], Iv[
         AuthCipher]])(implicit
-      M: MonadError[F, MacaroonService.Error],
+      M: MonadError[F, CryptographyError],
       keyGen: SymmetricKeyGen[F, HmacAlgorithm, MacSigningKey],
       ivGen: IvGen[F, AuthCipher])
       extends PrincipalService[F, Endpoint[F, MacSigningKey[HmacAlgorithm]]] {
@@ -129,21 +132,20 @@ object PrincipalService {
       : PrincipalService[F, Endpoint[F, MacSigningKey[HMACSHA256]]] = {
     implicit val counterStrategy: IvGen[F, XChaCha20Poly1305] =
       XChaCha20Poly1305.defaultIvGen
-    implicit val error: MonadError[F, MacaroonService.Error] =
-      new MonadError[F, MacaroonService.Error] {
+    implicit val error: MonadError[F, CryptographyError] =
+      new MonadError[F, CryptographyError] {
         override def flatMap[A, B](fa: F[A])(f: A => F[B]): F[B] =
           Sync[F].flatMap(fa)(f)
 
         override def tailRecM[A, B](a: A)(f: A => F[Either[A, B]]): F[B] =
           Sync[F].tailRecM(a)(f)
 
-        override def raiseError[A](e: MacaroonService.Error): F[A] =
+        override def raiseError[A](e: CryptographyError): F[A] =
           Sync[F].raiseError(new Throwable(e.toString))
 
         override def handleErrorWith[A](fa: F[A])(
-            f: MacaroonService.Error => F[A]): F[A] =
-          Sync[F].handleErrorWith(fa)(t =>
-            f(MacaroonService.KeyGenError(t.getMessage)) // TODO
+            f: CryptographyError => F[A]): F[A] =
+          Sync[F].handleErrorWith(fa)(t => f(KeyGenError(t.getMessage)) // TODO
           )
 
         override def pure[A](x: A): F[A] = Sync[F].pure(x)

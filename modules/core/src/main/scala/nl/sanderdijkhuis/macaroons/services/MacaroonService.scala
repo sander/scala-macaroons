@@ -8,6 +8,7 @@ import eu.timepit.refined.api.RefType.refinedRefType
 import eu.timepit.refined.auto._
 import eu.timepit.refined.collection._
 import eu.timepit.refined.refineV
+import nl.sanderdijkhuis.macaroons.cryptography.util._
 import nl.sanderdijkhuis.macaroons.domain.macaroon._
 import nl.sanderdijkhuis.macaroons.domain.verification._
 import nl.sanderdijkhuis.macaroons.types.bytes._
@@ -191,63 +192,10 @@ object MacaroonService {
   type RootKey              = MacSigningKey[HMACSHA256]
   type InitializationVector = Iv[XChaCha20Poly1305]
 
-  implicit def unsafeMessageAuth[F[_]: Monad](implicit
-      original: MessageAuth[MacErrorM, HMACSHA256, MacSigningKey])
-      : MessageAuth[F, HMACSHA256, MacSigningKey] = {
-    val fk: MacErrorM ~> F = λ[MacErrorM ~> F](s => s.toOption.get.pure[F])
-    new MessageAuth[F, HMACSHA256, MacSigningKey] {
-      def algorithm: String = original.algorithm
-
-      def sign(
-          in: Array[Byte],
-          key: MacSigningKey[HMACSHA256]): F[MAC[HMACSHA256]] =
-        fk(original.sign(in, key))
-
-      def verifyBool(
-          in: Array[Byte],
-          hashed: MAC[HMACSHA256],
-          key: MacSigningKey[HMACSHA256]): F[Boolean] =
-        fk(original.verifyBool(in, hashed, key))
-    }
-  }
-
-  sealed trait Error                        extends Throwable
-  case class EncryptionError(value: String) extends Error
-  case class KeyGenError(value: String)     extends Error
-
-  implicit def pureAuthEncryptor[F[_]](implicit
-      F: MonadError[F, Error],
-      e: Encryptor[IO, XChaCha20Poly1305, BouncySecretKey])
-      : Encryptor[F, XChaCha20Poly1305, BouncySecretKey] = {
-    val fk: IO ~> F = λ[IO ~> F](s =>
-      MonadError[F, Error].fromEither(s.attempt.unsafeRunSync().leftMap(t =>
-        EncryptionError(t.getMessage))))
-    new Encryptor[F, XChaCha20Poly1305, BouncySecretKey] {
-      def encrypt(
-          plainText: PlainText,
-          key: BouncySecretKey[XChaCha20Poly1305],
-          iv: Iv[XChaCha20Poly1305]): F[CipherText[XChaCha20Poly1305]] =
-        fk(e.encrypt(plainText, key, iv))
-
-      def decrypt(
-          cipherText: CipherText[XChaCha20Poly1305],
-          key: BouncySecretKey[XChaCha20Poly1305]): F[PlainText] =
-        fk(e.decrypt(cipherText, key))
-    }
-  }
-
-  def apply[F[_]](implicit F: MonadError[F, Error])
+  def apply[F[_]](implicit F: MonadError[F, CryptographyError])
       : MacaroonService[F, RootKey, InitializationVector] =
     new TsecLive[F, SHA256, HMACSHA256, XChaCha20Poly1305, BouncySecretKey](
-      v =>
-        MonadError[F, Error]
-          .fromEither(HMACSHA256.buildKey[MacErrorM](v.toArray).leftMap(t =>
-            KeyGenError(t.getMessage))),
-      v => {
-        val key = XChaCha20Poly1305.defaultKeyGen[IO].build(v.toArray).attempt
-          .unsafeRunSync()
-        MonadError[F, Error]
-          .fromEither(key.leftMap(t => KeyGenError(t.getMessage)))
-      },
+      buildMacKey[F],
+      buildEncryptionKey[F],
       XChaCha20Poly1305.nonceSize)
 }

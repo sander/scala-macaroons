@@ -10,6 +10,7 @@ import eu.timepit.refined.predicates.all.NonEmpty
 import eu.timepit.refined.refineV
 import monocle.Lens
 import monocle.macros.GenLens
+import nl.sanderdijkhuis.macaroons.cryptography.util.CryptographyError
 import nl.sanderdijkhuis.macaroons.domain.macaroon._
 import nl.sanderdijkhuis.macaroons.domain.verification.{
   VerificationResult, Verified
@@ -23,8 +24,8 @@ object IntegrationSuite extends SimpleIOSuite {
 
   import TestData._
 
-  implicit def err[F[_]: Sync]: MonadError[F, MacaroonService.Error] =
-    new MonadError[F, MacaroonService.Error] {
+  implicit def err[F[_]: Sync]: MonadError[F, CryptographyError] =
+    new MonadError[F, CryptographyError] {
 
       override def flatMap[A, B](fa: F[A])(f: A => F[B]): F[B] =
         Sync[F].flatMap(fa)(f)
@@ -32,11 +33,11 @@ object IntegrationSuite extends SimpleIOSuite {
       override def tailRecM[A, B](a: A)(f: A => F[Either[A, B]]): F[B] =
         Sync[F].tailRecM(a)(f)
 
-      override def raiseError[A](e: MacaroonService.Error): F[A] =
+      override def raiseError[A](e: CryptographyError): F[A] =
         Sync[F].raiseError(new Throwable(e.getMessage))
 
       override def handleErrorWith[A](fa: F[A])(
-          f: MacaroonService.Error => F[A]): F[A] = ???
+          f: CryptographyError => F[A]): F[A] = ???
 
       override def pure[A](x: A): F[A] = Sync[F].pure(x)
     }
