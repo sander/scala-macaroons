@@ -35,12 +35,12 @@ object util {
     }
   }
 
-  implicit def encryptor[F[_]](implicit
-      F: MonadError[F, CryptographyError],
+  def encryptor[F[_], E >: CryptographyError](implicit
+      F: MonadError[F, E],
       e: Encryptor[IO, XChaCha20Poly1305, BouncySecretKey])
       : Encryptor[F, XChaCha20Poly1305, BouncySecretKey] = {
     val fk: IO ~> F = λ[IO ~> F](s =>
-      MonadError[F, CryptographyError].fromEither(
+      F.fromEither(
         s.attempt.unsafeRunSync().leftMap(t => EncryptionError(t.getMessage))))
     new Encryptor[F, XChaCha20Poly1305, BouncySecretKey] {
       def encrypt(
@@ -56,18 +56,15 @@ object util {
     }
   }
 
-  def buildMacKey[F[_]](in: ByteVector)(implicit
-      F: MonadError[F, CryptographyError]): F[MacSigningKey[HMACSHA256]] =
-    MonadError[F, CryptographyError]
-      .fromEither(HMACSHA256.buildKey[MacErrorM](in.toArray).leftMap(t =>
-        KeyGenError(t.getMessage)))
+  def buildMacKey[F[_], E >: CryptographyError](in: ByteVector)(implicit
+      F: MonadError[F, E]): F[MacSigningKey[HMACSHA256]] =
+    F.fromEither(HMACSHA256.buildKey[MacErrorM](in.toArray).leftMap(t =>
+      KeyGenError(t.getMessage)))
 
-  def buildEncryptionKey[F[_]](in: ByteVector)(implicit
-      F: MonadError[F, CryptographyError])
-      : F[BouncySecretKey[XChaCha20Poly1305]] = {
+  def buildEncryptionKey[F[_], E >: CryptographyError](in: ByteVector)(implicit
+      F: MonadError[F, E]): F[BouncySecretKey[XChaCha20Poly1305]] = {
     val key = XChaCha20Poly1305.defaultKeyGen[IO].build(in.toArray).attempt
       .unsafeRunSync()
-    MonadError[F, CryptographyError]
-      .fromEither(key.leftMap(t => KeyGenError(t.getMessage)))
+    F.fromEither(key.leftMap(t => KeyGenError(t.getMessage)))
   }
 }

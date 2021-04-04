@@ -1,6 +1,6 @@
 package nl.sanderdijkhuis.macaroons.integration
 
-import cats.MonadError
+import cats.{~>, MonadError}
 import cats.data._
 import cats.effect._
 import cats.implicits._
@@ -24,24 +24,6 @@ object IntegrationSuite extends SimpleIOSuite {
 
   import TestData._
 
-  implicit def err[F[_]: Sync]: MonadError[F, CryptographyError] =
-    new MonadError[F, CryptographyError] {
-
-      override def flatMap[A, B](fa: F[A])(f: A => F[B]): F[B] =
-        Sync[F].flatMap(fa)(f)
-
-      override def tailRecM[A, B](a: A)(f: A => F[Either[A, B]]): F[B] =
-        Sync[F].tailRecM(a)(f)
-
-      override def raiseError[A](e: CryptographyError): F[A] =
-        Sync[F].raiseError(new Throwable(e.getMessage))
-
-      override def handleErrorWith[A](fa: F[A])(
-          f: CryptographyError => F[A]): F[A] = ???
-
-      override def pure[A](x: A): F[A] = Sync[F].pure(x)
-    }
-
   test("example from paper") {
     (for {
       m_ts <- ts.assert()
@@ -61,7 +43,7 @@ object IntegrationSuite extends SimpleIOSuite {
       m_as <- as.addFirstPartyCaveat(m_as, timeBefore9am)
       m_as <- as.addFirstPartyCaveat(m_as, ipMatch)
       m_as_sealed <- StateT((s: TestState) =>
-        MacaroonService[IO].bind(m_fs, m_as).map(m => (s, m)))
+        MacaroonService[IO, Throwable].bind(m_fs, m_as).map(m => (s, m)))
       result <- ts.verify(
         m_fs,
         p =>

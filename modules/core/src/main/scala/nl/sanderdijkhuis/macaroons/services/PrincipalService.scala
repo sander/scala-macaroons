@@ -153,6 +153,6 @@ object PrincipalService {
     Live(maybeLocation)(
       rootKeyRepository,
       dischargeKeyRepository,
-      MacaroonService[F])
+      MacaroonService[F, CryptographyError])
   }
 }
