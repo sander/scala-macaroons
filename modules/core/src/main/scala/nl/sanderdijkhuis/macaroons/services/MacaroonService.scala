@@ -15,8 +15,8 @@ import scodec.bits.ByteVector
 import tsec.cipher.symmetric._
 import tsec.cipher.symmetric.bouncy.BouncySecretKey
 import tsec.cipher.symmetric.bouncy.XChaCha20Poly1305
-import tsec.hashing.CryptoHasher
-import tsec.hashing.jca.SHA256
+import tsec.hashing.{CryptoHash, CryptoHasher}
+import tsec.hashing.jca.{hashOps, SHA256}
 import tsec.keygen.symmetric.SymmetricKeyGen
 import tsec.mac.jca.HMACSHA256
 import tsec.mac.jca.MacErrorM
@@ -25,6 +25,7 @@ import tsec.mac.MAC
 import tsec.mac.MessageAuth
 
 import javax.crypto.spec.SecretKeySpec
+import scala.util.chaining._
 
 /** Operations for generating and manipulating [[Macaroon]]s. */
 trait MacaroonService[F[_], RootKey, InitializationVector] {
@@ -60,8 +61,8 @@ object MacaroonService {
 
   class TsecLive[F[
       _]: Monad, HashAlgorithm, HmacAlgorithm, AuthCipher, AuthCipherSecretKey[
-      _]](nonceSize: Int)(implicit
-      val hasher: CryptoHasher[F, HashAlgorithm],
+      _]](hash: ByteVector => CryptoHash[HashAlgorithm], nonceSize: Int)(
+      implicit
       mac: MessageAuth[F, HmacAlgorithm, MacSigningKey],
       encryptor: AuthEncryptor[F, AuthCipher, AuthCipherSecretKey],
       authCipherAPI: AuthCipherAPI[AuthCipher, AuthCipherSecretKey],
@@ -70,19 +71,14 @@ object MacaroonService {
       extends MacaroonService[F, MacSigningKey[HmacAlgorithm], Iv[AuthCipher]] {
 
     private def unsafeNonEmptyByteVector(
-        byteVector: ByteVector): F[NonEmptyByteVector] = refineV[NonEmpty]
-      .unsafeFrom(byteVector).pure[F]
-
-    private def hash(byteVector: ByteVector): F[NonEmptyByteVector] = for {
-      a <- hasher.hash(byteVector.toArray).map(ByteVector.apply)
-      b <- unsafeNonEmptyByteVector(a)
-    } yield b
+        byteVector: ByteVector): NonEmptyByteVector = refineV[NonEmpty]
+      .unsafeFrom(byteVector)
 
     private def bind(
         authorizing: Macaroon with Authority,
         dischargingTag: AuthenticationTag): F[AuthenticationTag] =
-      hash(dischargingTag.value ++ authorizing.tag.value)
-        .map(AuthenticationTag.apply)
+      hash(dischargingTag.value ++ authorizing.tag.value).pipe(v =>
+        AuthenticationTag(unsafeNonEmptyByteVector(ByteVector(v)))).pure[F]
 
     def bind(
         authorizing: Macaroon with Authority,
@@ -95,8 +91,8 @@ object MacaroonService {
     private def authenticate(
         data: ByteVector,
         key: MacSigningKey[HmacAlgorithm]): F[AuthenticationTag] = mac
-      .sign(data.toArray, key).map(ByteVector(_))
-      .flatMap(unsafeNonEmptyByteVector).map(AuthenticationTag.apply)
+      .sign(data.toArray, key).map(ByteVector(_)).map(unsafeNonEmptyByteVector)
+      .map(AuthenticationTag.apply)
 
     private def authenticateCaveat(
         tag: AuthenticationTag,
@@ -277,6 +273,7 @@ object MacaroonService {
     implicit val authCipherAPI
         : AuthCipherAPI[XChaCha20Poly1305, BouncySecretKey] = XChaCha20Poly1305
     new TsecLive[F, SHA256, HMACSHA256, XChaCha20Poly1305, BouncySecretKey](
+      _.toArray.hash[SHA256],
       XChaCha20Poly1305.nonceSize)
   }
 }
