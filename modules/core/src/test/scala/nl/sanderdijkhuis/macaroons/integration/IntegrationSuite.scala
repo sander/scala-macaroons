@@ -24,8 +24,11 @@ object IntegrationSuite extends SimpleIOSuite {
 
   import TestData._
 
-  test("example from paper") {
-    (for {
+  type E    = Throwable
+  type F[A] = Either[E, A]
+
+  pureTest("example from paper") {
+    val program: StateT[F, TestState, Boolean] = for {
       m_ts <- ts.assert()
       m_ts <- ts.addFirstPartyCaveat(m_ts, chunkInRange)
       m_ts <- ts.addFirstPartyCaveat(m_ts, opInReadWrite)
@@ -34,16 +37,13 @@ object IntegrationSuite extends SimpleIOSuite {
         .addThirdPartyCaveat(m_ts, Predicate(userIsBob), asEndpoint)
       m_fs <- fs.addFirstPartyCaveat(m_fs, chunkIs235)
       m_fs <- fs.addFirstPartyCaveat(m_fs, operationIsRead)
-      _ <- OptionT(as.getPredicate(cid))
-        .getOrElseF(StateT[IO, TestState, Predicate](_ =>
-          IO.raiseError(new Throwable("could not find predicate"))))
-      m_as <- OptionT(as.discharge(cid))
-        .getOrElseF(StateT[IO, TestState, Macaroon with Authority](_ =>
-          IO.raiseError(new Throwable("could not discharge"))))
-      m_as <- as.addFirstPartyCaveat(m_as, timeBefore9am)
-      m_as <- as.addFirstPartyCaveat(m_as, ipMatch)
-      m_as_sealed <- StateT((s: TestState) =>
-        MacaroonService[IO, Throwable].bind(m_fs, m_as).map(m => (s, m)))
+      _ <- as.getPredicate(cid)
+        .flatMapF(_.toRight(new Throwable("cound not find predicate")))
+      m_as <- as.discharge(cid)
+        .flatMapF(_.toRight(new Throwable("could not discharge")))
+      m_as        <- as.addFirstPartyCaveat(m_as, timeBefore9am)
+      m_as        <- as.addFirstPartyCaveat(m_as, ipMatch)
+      m_as_sealed <- StateT.liftF(MacaroonService[F, E].bind(m_fs, m_as))
       result <- ts.verify(
         m_fs,
         p =>
@@ -58,7 +58,8 @@ object IntegrationSuite extends SimpleIOSuite {
               ipMatch).contains(p)),
         Set(m_as_sealed)
       )
-    } yield assert(result == Verified)).runA(TestState())
+    } yield result == Verified
+    assert(program.runA(TestState()).contains(true))
   }
 
   //noinspection TypeAnnotation
@@ -97,13 +98,17 @@ object IntegrationSuite extends SimpleIOSuite {
         as: PrincipalState = PrincipalState(),
         nextInt: Int = 0)
 
-    val ts = principal(GenLens[TestState](_.ts), targetServiceLocation.some)
-    val fs = principal(GenLens[TestState](_.fs), forumServiceLocation.some)
+    val ts =
+      unsafePrincipal(GenLens[TestState](_.ts), targetServiceLocation.some)
 
-    val as =
-      principal(GenLens[TestState](_.as), authenticationServiceLocation.some)
+    val fs =
+      unsafePrincipal(GenLens[TestState](_.fs), forumServiceLocation.some)
 
-    val asEndpoint = Endpoint[StateT[IO, TestState, *], RootKey](
+    val as = unsafePrincipal(
+      GenLens[TestState](_.as),
+      authenticationServiceLocation.some)
+
+    val asEndpoint = Endpoint[StateT[F, TestState, *], RootKey](
       Some(authenticationServiceLocation),
       (v, w) => dischargeKeyRepository(GenLens[TestState](_.as)).protect(v, w))
 
@@ -114,22 +119,28 @@ object IntegrationSuite extends SimpleIOSuite {
     private type PrincipalId = Lens[TestState, PrincipalState]
 
     private def rootKeyRepository(id: PrincipalId) =
-      KeyRepository.inMemoryF[IO, TestState, Identifier, RootKey](
+      KeyRepository.inMemoryF[F, TestState, Identifier, RootKey](
         id.andThen(GenLens[PrincipalState](_.rootKeys)),
         generateIdInState)
 
     private def dischargeKeyRepository(id: PrincipalId) =
-      KeyRepository.inMemoryF[IO, TestState, Identifier, (RootKey, Predicate)](
+      KeyRepository.inMemoryF[F, TestState, Identifier, (RootKey, Predicate)](
         id.andThen(GenLens[PrincipalState](_.dischargeKeys)),
         generateIdInState)
 
-    private def principal(id: PrincipalId, maybeLocation: Option[Location]) =
-      PrincipalService.make[StateT[IO, TestState, *], Throwable](maybeLocation)(
+    private def unsafeGenerateKey =
+      HMACSHA256.generateKey[IO].attempt.unsafeRunSync()
+
+    private def unsafeGenerateIv =
+      XChaCha20Poly1305.defaultIvGen[IO].genIv.attempt.unsafeRunSync()
+
+    private def unsafePrincipal(
+        id: PrincipalId,
+        maybeLocation: Option[Location]) =
+      PrincipalService.make[StateT[F, TestState, *], E](maybeLocation)(
         rootKeyRepository(id),
         dischargeKeyRepository(id),
-        StateT((s: TestState) => HMACSHA256.generateKey[IO].map(k => (s, k))),
-        StateT((s: TestState) =>
-          XChaCha20Poly1305.defaultIvGen[IO].genIv.map(iv => (s, iv)))
-      )
+        StateT.liftF(unsafeGenerateKey),
+        StateT.liftF(unsafeGenerateIv))
   }
 }
