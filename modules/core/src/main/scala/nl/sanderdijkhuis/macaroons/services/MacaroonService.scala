@@ -217,25 +217,22 @@ object MacaroonService {
 
   implicit def pureAuthEncryptor[F[_]](implicit
       F: MonadError[F, Error],
-      original: Encryptor[IO, XChaCha20Poly1305, BouncySecretKey])
+      e: Encryptor[IO, XChaCha20Poly1305, BouncySecretKey])
       : Encryptor[F, XChaCha20Poly1305, BouncySecretKey] = {
     val fk: IO ~> F = λ[IO ~> F](s =>
-      s.map(_.asRight).handleErrorWith(_.getMessage.asLeft.pure[IO])
-        .unsafeRunSync() match {
-        case Left(e)  => MonadError[F, Error].raiseError(EncryptionError(e))
-        case Right(v) => v.pure[F]
-      })
+      MonadError[F, Error].fromEither(s.attempt.unsafeRunSync().leftMap(t =>
+        EncryptionError(t.getMessage))))
     new Encryptor[F, XChaCha20Poly1305, BouncySecretKey] {
-      override def encrypt(
+      def encrypt(
           plainText: PlainText,
           key: BouncySecretKey[XChaCha20Poly1305],
           iv: Iv[XChaCha20Poly1305]): F[CipherText[XChaCha20Poly1305]] =
-        fk(original.encrypt(plainText, key, iv))
+        fk(e.encrypt(plainText, key, iv))
 
-      override def decrypt(
+      def decrypt(
           cipherText: CipherText[XChaCha20Poly1305],
           key: BouncySecretKey[XChaCha20Poly1305]): F[PlainText] =
-        fk(original.decrypt(cipherText, key))
+        fk(e.decrypt(cipherText, key))
     }
   }
 
