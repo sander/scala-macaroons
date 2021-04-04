@@ -1,6 +1,5 @@
 package nl.sanderdijkhuis.macaroons.integration
 
-import cats.{~>, Id, MonadError}
 import cats.data._
 import cats.effect._
 import cats.implicits._
@@ -10,14 +9,14 @@ import eu.timepit.refined.predicates.all.NonEmpty
 import eu.timepit.refined.refineV
 import monocle.Lens
 import monocle.macros.GenLens
-import nl.sanderdijkhuis.macaroons.cryptography.util.CryptographyError
 import nl.sanderdijkhuis.macaroons.domain.macaroon._
 import nl.sanderdijkhuis.macaroons.domain.verification.{
   VerificationResult, Verified
 }
-import nl.sanderdijkhuis.macaroons.services.MacaroonService.RootKey
 import nl.sanderdijkhuis.macaroons.repositories.KeyRepository
+import nl.sanderdijkhuis.macaroons.services.MacaroonService.RootKey
 import nl.sanderdijkhuis.macaroons.services.{MacaroonService, PrincipalService}
+import tsec.cipher.symmetric.bouncy.XChaCha20Poly1305
 import tsec.mac.jca.HMACSHA256
 import weaver._
 
@@ -128,6 +127,9 @@ object IntegrationSuite extends SimpleIOSuite {
       PrincipalService.make(maybeLocation)(
         rootKeyRepository(id),
         dischargeKeyRepository(id),
-        StateT((s: TestState) => HMACSHA256.generateKey[IO].map(k => (s, k))))
+        StateT((s: TestState) => HMACSHA256.generateKey[IO].map(k => (s, k))),
+        StateT((s: TestState) =>
+          XChaCha20Poly1305.defaultIvGen[IO].genIv.map(iv => (s, iv)))
+      )
   }
 }
