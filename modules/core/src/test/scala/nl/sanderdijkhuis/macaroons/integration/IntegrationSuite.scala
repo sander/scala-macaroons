@@ -1,6 +1,6 @@
 package nl.sanderdijkhuis.macaroons.integration
 
-import cats.{~>, MonadError}
+import cats.{~>, Id, MonadError}
 import cats.data._
 import cats.effect._
 import cats.implicits._
@@ -18,6 +18,7 @@ import nl.sanderdijkhuis.macaroons.domain.verification.{
 import nl.sanderdijkhuis.macaroons.services.MacaroonService.RootKey
 import nl.sanderdijkhuis.macaroons.repositories.KeyRepository
 import nl.sanderdijkhuis.macaroons.services.{MacaroonService, PrincipalService}
+import tsec.mac.jca.HMACSHA256
 import weaver._
 
 object IntegrationSuite extends SimpleIOSuite {
@@ -124,7 +125,9 @@ object IntegrationSuite extends SimpleIOSuite {
         generateIdInState)
 
     private def principal(id: PrincipalId, maybeLocation: Option[Location]) =
-      PrincipalService
-        .make(maybeLocation)(rootKeyRepository(id), dischargeKeyRepository(id))
+      PrincipalService.make(maybeLocation)(
+        rootKeyRepository(id),
+        dischargeKeyRepository(id),
+        StateT((s: TestState) => HMACSHA256.generateKey[IO].map(k => (s, k))))
   }
 }

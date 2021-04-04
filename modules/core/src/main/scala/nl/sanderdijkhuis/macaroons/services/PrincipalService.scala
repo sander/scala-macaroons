@@ -51,15 +51,15 @@ object PrincipalService {
         Identifier,
         (MacSigningKey[HmacAlgorithm], Predicate)],
       macaroonService: MacaroonService[F, MacSigningKey[HmacAlgorithm], Iv[
-        AuthCipher]])(implicit
+        AuthCipher]],
+      generateKey: F[MacSigningKey[HmacAlgorithm]])(implicit
       M: MonadError[F, E],
-      keyGen: SymmetricKeyGen[F, HmacAlgorithm, MacSigningKey],
       ivGen: IvGen[F, AuthCipher])
       extends PrincipalService[F, Endpoint[F, MacSigningKey[HmacAlgorithm]]] {
 
     override def assert(): F[Macaroon with Authority] =
       for {
-        rootKey <- keyGen.generateKey
+        rootKey <- generateKey
         cId     <- rootKeyRepository.protect(rootKey)
         m       <- macaroonService.generate(cId, rootKey, maybeLocation)
       } yield m
@@ -90,7 +90,7 @@ object PrincipalService {
         thirdParty: Endpoint[F, MacSigningKey[HmacAlgorithm]])
         : F[(Macaroon with Authority, Identifier)] =
       for {
-        rootKey <- keyGen.generateKey
+        rootKey <- generateKey
         cId     <- thirdParty.prepare(rootKey, predicate)
         iv      <- ivGen.genIv
         m <- macaroonService.addThirdPartyCaveat(
@@ -127,14 +127,15 @@ object PrincipalService {
       dischargeKeyRepository: KeyRepository[
         F,
         Identifier,
-        (MacSigningKey[HMACSHA256], Predicate)])(implicit
-      keyGen: SymmetricKeyGen[F, HMACSHA256, MacSigningKey])
+        (MacSigningKey[HMACSHA256], Predicate)],
+      generateKey: F[MacSigningKey[HMACSHA256]])
       : PrincipalService[F, Endpoint[F, MacSigningKey[HMACSHA256]]] = {
     implicit val counterStrategy: IvGen[F, XChaCha20Poly1305] =
       XChaCha20Poly1305.defaultIvGen
     Live[F, HMACSHA256, XChaCha20Poly1305, Throwable](maybeLocation)(
       rootKeyRepository,
       dischargeKeyRepository,
-      MacaroonService[F, Throwable])
+      MacaroonService[F, Throwable],
+      generateKey)
   }
 }
