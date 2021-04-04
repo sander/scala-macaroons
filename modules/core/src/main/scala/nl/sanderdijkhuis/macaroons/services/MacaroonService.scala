@@ -13,16 +13,12 @@ import nl.sanderdijkhuis.macaroons.domain.verification._
 import nl.sanderdijkhuis.macaroons.types.bytes._
 import scodec.bits.ByteVector
 import tsec.cipher.symmetric._
-import tsec.cipher.symmetric.bouncy.BouncySecretKey
-import tsec.cipher.symmetric.bouncy.XChaCha20Poly1305
-import tsec.hashing.{CryptoHash, CryptoHasher}
+import tsec.cipher.symmetric.bouncy.{BouncySecretKey, XChaCha20Poly1305}
+import tsec.hashing.CryptoHasher
 import tsec.hashing.jca.{hashOps, SHA256}
 import tsec.keygen.symmetric.SymmetricKeyGen
-import tsec.mac.jca.HMACSHA256
-import tsec.mac.jca.MacErrorM
-import tsec.mac.jca.MacSigningKey
-import tsec.mac.MAC
-import tsec.mac.MessageAuth
+import tsec.mac.{MAC, MessageAuth}
+import tsec.mac.jca.{HMACSHA256, MacErrorM, MacSigningKey}
 
 import javax.crypto.spec.SecretKeySpec
 import scala.util.chaining._
@@ -61,11 +57,10 @@ object MacaroonService {
 
   class TsecLive[F[
       _]: Monad, HashAlgorithm, HmacAlgorithm, AuthCipher, AuthCipherSecretKey[
-      _]](hash: ByteVector => CryptoHash[HashAlgorithm], nonceSize: Int)(
-      implicit
+      _]](nonceSize: Int)(implicit
       mac: MessageAuth[F, HmacAlgorithm, MacSigningKey],
-      encryptor: AuthEncryptor[F, AuthCipher, AuthCipherSecretKey],
-      authCipherAPI: AuthCipherAPI[AuthCipher, AuthCipherSecretKey],
+      hasher: CryptoHasher[Id, HashAlgorithm],
+      encryptor: Encryptor[F, AuthCipher, AuthCipherSecretKey],
       encryptionKeyGen: SymmetricKeyGen[F, AuthCipher, AuthCipherSecretKey],
       macKeyGen: SymmetricKeyGen[F, HmacAlgorithm, MacSigningKey])
       extends MacaroonService[F, MacSigningKey[HmacAlgorithm], Iv[AuthCipher]] {
@@ -77,7 +72,8 @@ object MacaroonService {
     private def bind(
         authorizing: Macaroon with Authority,
         dischargingTag: AuthenticationTag): F[AuthenticationTag] =
-      hash(dischargingTag.value ++ authorizing.tag.value)
+      (dischargingTag.value ++ authorizing.tag.value).toArray
+        .hash[HashAlgorithm]
         .pipe(v => AuthenticationTag(unsafeNonEmptyByteVector(ByteVector(v))))
         .pure[F]
 
@@ -138,7 +134,7 @@ object MacaroonService {
       for {
         k <- encryptionKeyGen.build(macaroon.tag.value.toArray)
         t = PlainText(key.toJavaKey.getEncoded)
-        e <- authCipherAPI.encrypt[F](t, k, initializationVector)
+        e <- encryptor.encrypt(t, k, initializationVector)
         c =
           Challenge(refineV[NonEmpty].unsafeFrom(ByteVector(e.toConcatenated)))
         m <- addCaveatHelper(macaroon, identifier, Some(c), maybeLocation)
@@ -154,7 +150,7 @@ object MacaroonService {
         c = CipherText[AuthCipher](
           RawCipherText(content.toArray),
           Iv(nonce.toArray))
-        d   <- authCipherAPI.decrypt(c, k)
+        d   <- encryptor.decrypt(c, k)
         key <- macKeyGen.build(d)
       } yield key
 
@@ -221,26 +217,15 @@ object MacaroonService {
 
   implicit def pureAuthEncryptor[F[_]](implicit
       F: MonadError[F, Error],
-      original: AuthEncryptor[IO, XChaCha20Poly1305, BouncySecretKey])
-      : AuthEncryptor[F, XChaCha20Poly1305, BouncySecretKey] = {
+      original: Encryptor[IO, XChaCha20Poly1305, BouncySecretKey])
+      : Encryptor[F, XChaCha20Poly1305, BouncySecretKey] = {
     val fk: IO ~> F = λ[IO ~> F](s =>
       s.map(_.asRight).handleErrorWith(_.getMessage.asLeft.pure[IO])
         .unsafeRunSync() match {
         case Left(e)  => MonadError[F, Error].raiseError(EncryptionError(e))
         case Right(v) => v.pure[F]
       })
-    new AuthEncryptor[F, XChaCha20Poly1305, BouncySecretKey] {
-      override def encryptDetached(
-          plainText: PlainText,
-          key: BouncySecretKey[XChaCha20Poly1305],
-          iv: Iv[XChaCha20Poly1305])
-          : F[(CipherText[XChaCha20Poly1305], AuthTag[XChaCha20Poly1305])] = ???
-
-      override def decryptDetached(
-          cipherText: CipherText[XChaCha20Poly1305],
-          key: BouncySecretKey[XChaCha20Poly1305],
-          authTag: AuthTag[XChaCha20Poly1305]): F[PlainText] = ???
-
+    new Encryptor[F, XChaCha20Poly1305, BouncySecretKey] {
       override def encrypt(
           plainText: PlainText,
           key: BouncySecretKey[XChaCha20Poly1305],
@@ -273,11 +258,7 @@ object MacaroonService {
   }
 
   def apply[F[_]](implicit F: MonadError[F, Error])
-      : MacaroonService[F, RootKey, InitializationVector] = {
-    implicit val authCipherAPI
-        : AuthCipherAPI[XChaCha20Poly1305, BouncySecretKey] = XChaCha20Poly1305
+      : MacaroonService[F, RootKey, InitializationVector] =
     new TsecLive[F, SHA256, HMACSHA256, XChaCha20Poly1305, BouncySecretKey](
-      _.toArray.hash[SHA256],
       XChaCha20Poly1305.nonceSize)
-  }
 }
