@@ -21,9 +21,10 @@ object KeyRepository {
       val id: State[S, I])
       extends KeyRepository[State[S, *], I, K] {
 
-    def protect(key: K): State[S, I] = id.transform { case (s, id) =>
-      (lens.modify(m => m + (id -> key))(s), id)
-    }
+    def protect(key: K): State[S, I] =
+      id.transform { case (s, id) =>
+        (lens.modify(m => m + (id -> key))(s), id)
+      }
 
     def recover(identifier: I): State[S, Option[K]] =
       State(s => (s, lens.get(s).get(identifier)))

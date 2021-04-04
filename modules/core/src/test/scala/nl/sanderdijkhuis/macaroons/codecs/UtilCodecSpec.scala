@@ -24,8 +24,8 @@ object UtilCodecSpec extends SimpleIOSuite {
   pureTest("decoding encoded values") {
     val codec = seeWhatHappensVector(constant(hex"01"))
 
-    def compare(value: Vector[Unit]) = codec.decode(codec.encode(value).require)
-      .require.value == value
+    def compare(value: Vector[Unit]) =
+      codec.decode(codec.encode(value).require).require.value == value
 
     assert
       .all(compare(Vector.empty), compare(Vector(())), compare(Vector((), ())))

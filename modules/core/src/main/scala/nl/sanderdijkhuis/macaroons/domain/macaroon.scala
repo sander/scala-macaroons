@@ -25,9 +25,9 @@ object macaroon {
 
   object Identifier {
 
-    def from(string: NonEmptyString): Identifier = ByteVector.encodeUtf8(string)
-      .toOption.flatMap(v => refineV[NonEmpty](v).toOption).get
-      .pipe(Identifier.apply)
+    def from(string: NonEmptyString): Identifier =
+      ByteVector.encodeUtf8(string).toOption
+        .flatMap(v => refineV[NonEmpty](v).toOption).get.pipe(Identifier.apply)
   }
 
   // TODO apply more

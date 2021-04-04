@@ -54,58 +54,62 @@ object PrincipalService {
       ivGen: IvGen[F, AuthCipher])
       extends PrincipalService[F, Endpoint[F, MacSigningKey[HmacAlgorithm]]] {
 
-    override def assert(): F[Macaroon with Authority] = for {
-      rootKey <- keyGen.generateKey
-      cId     <- rootKeyRepository.protect(rootKey)
-      m       <- macaroonService.generate(cId, rootKey, maybeLocation)
-    } yield m
+    override def assert(): F[Macaroon with Authority] =
+      for {
+        rootKey <- keyGen.generateKey
+        cId     <- rootKeyRepository.protect(rootKey)
+        m       <- macaroonService.generate(cId, rootKey, maybeLocation)
+      } yield m
 
     override def discharge(
-        identifier: Identifier): F[Option[Macaroon with Authority]] = for {
-      rootKey <- dischargeKeyRepository.recover(identifier)
-        .flatMap[Option[MacSigningKey[HmacAlgorithm]]] {
-          case Some((rootKey, _)) => rootKey.some.pure[F]
-          case None               => Monad[F].pure(None)
+        identifier: Identifier): F[Option[Macaroon with Authority]] =
+      for {
+        rootKey <- dischargeKeyRepository.recover(identifier)
+          .flatMap[Option[MacSigningKey[HmacAlgorithm]]] {
+            case Some((rootKey, _)) => rootKey.some.pure[F]
+            case None               => Monad[F].pure(None)
+          }
+        m <- rootKey match {
+          case Some(rootKey) => macaroonService
+              .generate(identifier, rootKey, maybeLocation).map(_.some)
+          case None => None.pure[F]
         }
-      m <- rootKey match {
-        case Some(rootKey) => macaroonService
-            .generate(identifier, rootKey, maybeLocation).map(_.some)
-        case None => None.pure[F]
-      }
-    } yield m
+      } yield m
 
     override def addFirstPartyCaveat(
         macaroon: Macaroon with Authority,
-        identifier: Identifier): F[Macaroon with Authority] = macaroonService
-      .addFirstPartyCaveat(macaroon, identifier)
+        identifier: Identifier): F[Macaroon with Authority] =
+      macaroonService.addFirstPartyCaveat(macaroon, identifier)
 
     override def addThirdPartyCaveat(
         macaroon: Macaroon with Authority,
         predicate: Predicate,
         thirdParty: Endpoint[F, MacSigningKey[HmacAlgorithm]])
-        : F[(Macaroon with Authority, Identifier)] = for {
-      rootKey <- keyGen.generateKey
-      cId     <- thirdParty.prepare(rootKey, predicate)
-      iv      <- ivGen.genIv
-      m <- macaroonService.addThirdPartyCaveat(
-        macaroon,
-        rootKey,
-        iv,
-        cId,
-        thirdParty.maybeLocation)
-    } yield (m, cId)
+        : F[(Macaroon with Authority, Identifier)] =
+      for {
+        rootKey <- keyGen.generateKey
+        cId     <- thirdParty.prepare(rootKey, predicate)
+        iv      <- ivGen.genIv
+        m <- macaroonService.addThirdPartyCaveat(
+          macaroon,
+          rootKey,
+          iv,
+          cId,
+          thirdParty.maybeLocation)
+      } yield (m, cId)
 
     override def verify(
         macaroon: Macaroon with Authority,
         verifier: Verifier,
-        dischargeMacaroons: Set[Macaroon]): F[VerificationResult] = for {
-      rootKey <- rootKeyRepository.recover(macaroon.id)
-      result <- rootKey match {
-        case Some(rootKey) => macaroonService
-            .verify(macaroon, rootKey, verifier, dischargeMacaroons)
-        case None => VerificationFailed.pure[F]
-      }
-    } yield result
+        dischargeMacaroons: Set[Macaroon]): F[VerificationResult] =
+      for {
+        rootKey <- rootKeyRepository.recover(macaroon.id)
+        result <- rootKey match {
+          case Some(rootKey) => macaroonService
+              .verify(macaroon, rootKey, verifier, dischargeMacaroons)
+          case None => VerificationFailed.pure[F]
+        }
+      } yield result
 
     override def getPredicate(identifier: Identifier): F[Option[Predicate]] =
       dischargeKeyRepository.recover(identifier).map {
@@ -127,18 +131,18 @@ object PrincipalService {
       XChaCha20Poly1305.defaultIvGen
     implicit val error: MonadError[F, MacaroonService.Error] =
       new MonadError[F, MacaroonService.Error] {
-        override def flatMap[A, B](fa: F[A])(f: A => F[B]): F[B] = Sync[F]
-          .flatMap(fa)(f)
+        override def flatMap[A, B](fa: F[A])(f: A => F[B]): F[B] =
+          Sync[F].flatMap(fa)(f)
 
         override def tailRecM[A, B](a: A)(f: A => F[Either[A, B]]): F[B] =
           Sync[F].tailRecM(a)(f)
 
-        override def raiseError[A](e: MacaroonService.Error): F[A] = Sync[F]
-          .raiseError(new Throwable(e.toString))
+        override def raiseError[A](e: MacaroonService.Error): F[A] =
+          Sync[F].raiseError(new Throwable(e.toString))
 
         override def handleErrorWith[A](fa: F[A])(
-            f: MacaroonService.Error => F[A]): F[A] = Sync[F]
-          .handleErrorWith(fa)(t =>
+            f: MacaroonService.Error => F[A]): F[A] =
+          Sync[F].handleErrorWith(fa)(t =>
             f(MacaroonService.KeyGenError(t.getMessage)) // TODO
           )
 

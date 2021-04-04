@@ -71,28 +71,29 @@ object MacaroonService {
       extends MacaroonService[F, MacSigningKey[HmacAlgorithm], Iv[AuthCipher]] {
 
     private def unsafeNonEmptyByteVector(
-        byteVector: ByteVector): NonEmptyByteVector = refineV[NonEmpty]
-      .unsafeFrom(byteVector)
+        byteVector: ByteVector): NonEmptyByteVector =
+      refineV[NonEmpty].unsafeFrom(byteVector)
 
     private def bind(
         authorizing: Macaroon with Authority,
         dischargingTag: AuthenticationTag): F[AuthenticationTag] =
-      hash(dischargingTag.value ++ authorizing.tag.value).pipe(v =>
-        AuthenticationTag(unsafeNonEmptyByteVector(ByteVector(v)))).pure[F]
+      hash(dischargingTag.value ++ authorizing.tag.value)
+        .pipe(v => AuthenticationTag(unsafeNonEmptyByteVector(ByteVector(v))))
+        .pure[F]
 
     def bind(
         authorizing: Macaroon with Authority,
-        discharging: Macaroon): F[Macaroon] = bind(authorizing, discharging.tag)
-      .map(t => discharging.copy(tag = t))
+        discharging: Macaroon): F[Macaroon] =
+      bind(authorizing, discharging.tag).map(t => discharging.copy(tag = t))
 
     private def toKey(byteVector: ByteVector): MacSigningKey[HmacAlgorithm] =
       MacSigningKey(new SecretKeySpec(byteVector.toArray, mac.algorithm))
 
     private def authenticate(
         data: ByteVector,
-        key: MacSigningKey[HmacAlgorithm]): F[AuthenticationTag] = mac
-      .sign(data.toArray, key).map(ByteVector(_)).map(unsafeNonEmptyByteVector)
-      .map(AuthenticationTag.apply)
+        key: MacSigningKey[HmacAlgorithm]): F[AuthenticationTag] =
+      mac.sign(data.toArray, key).map(ByteVector(_))
+        .map(unsafeNonEmptyByteVector).map(AuthenticationTag.apply)
 
     private def authenticateCaveat(
         tag: AuthenticationTag,
@@ -133,26 +134,29 @@ object MacaroonService {
         key: MacSigningKey[HmacAlgorithm],
         initializationVector: Iv[AuthCipher],
         identifier: Identifier,
-        maybeLocation: Option[Location]): F[Macaroon with Authority] = for {
-      k <- encryptionKeyGen.build(macaroon.tag.value.toArray)
-      t = PlainText(key.toJavaKey.getEncoded)
-      e <- authCipherAPI.encrypt[F](t, k, initializationVector)
-      c = Challenge(refineV[NonEmpty].unsafeFrom(ByteVector(e.toConcatenated)))
-      m <- addCaveatHelper(macaroon, identifier, Some(c), maybeLocation)
-    } yield m
+        maybeLocation: Option[Location]): F[Macaroon with Authority] =
+      for {
+        k <- encryptionKeyGen.build(macaroon.tag.value.toArray)
+        t = PlainText(key.toJavaKey.getEncoded)
+        e <- authCipherAPI.encrypt[F](t, k, initializationVector)
+        c =
+          Challenge(refineV[NonEmpty].unsafeFrom(ByteVector(e.toConcatenated)))
+        m <- addCaveatHelper(macaroon, identifier, Some(c), maybeLocation)
+      } yield m
 
     def decrypt(
         tag: AuthenticationTag,
-        challenge: Challenge): F[MacSigningKey[HmacAlgorithm]] = for {
-      k <- encryptionKeyGen.build(tag.value.toArray)
-      (content, nonce) = challenge.value
-        .splitAt(challenge.value.length - nonceSize)
-      c = CipherText[AuthCipher](
-        RawCipherText(content.toArray),
-        Iv(nonce.toArray))
-      d   <- authCipherAPI.decrypt(c, k)
-      key <- macKeyGen.build(d)
-    } yield key
+        challenge: Challenge): F[MacSigningKey[HmacAlgorithm]] =
+      for {
+        k <- encryptionKeyGen.build(tag.value.toArray)
+        (content, nonce) = challenge.value
+          .splitAt(challenge.value.length - nonceSize)
+        c = CipherText[AuthCipher](
+          RawCipherText(content.toArray),
+          Iv(nonce.toArray))
+        d   <- authCipherAPI.decrypt(c, k)
+        key <- macKeyGen.build(d)
+      } yield key
 
     def verify(
         macaroon: Macaroon with Authority,

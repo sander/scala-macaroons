@@ -46,8 +46,8 @@ object macaroon {
     (version ~> optionalLocation :: identifier :: endOfSection ~> caveats ::
       endOfSection ~> authenticationTag).as[Macaroon]
 
-  private def tag(tagInt: Int): Codec[Unit] = "tag" |
-    constant(vlong.encode(tagInt).require)
+  private def tag(tagInt: Int): Codec[Unit] =
+    "tag" | constant(vlong.encode(tagInt).require)
 
   private def requiredField[A](tagInt: Int, codec: Codec[A]): Codec[A] =
     "required" | tag(tagInt) ~> variableSizeBytesLong(vlong, codec)
@@ -58,14 +58,14 @@ object macaroon {
 
   object MacaroonCodec {
 
-    def encode[F[_]: Sync](macaroon: Macaroon): F[ByteVector] = Sync[F]
-      .fromTry(macaroonV2.encode(macaroon).toTry).map(_.bytes)
+    def encode[F[_]: Sync](macaroon: Macaroon): F[ByteVector] =
+      Sync[F].fromTry(macaroonV2.encode(macaroon).toTry).map(_.bytes)
 
-    def decode[F[_]: Sync](byteVector: ByteVector): F[Macaroon] = Sync[F]
-      .delay(macaroonV2.decodeValue(byteVector.bits).require)
+    def decode[F[_]: Sync](byteVector: ByteVector): F[Macaroon] =
+      Sync[F].delay(macaroonV2.decodeValue(byteVector.bits).require)
 
     def decodeAuthorizing[F[_]: Sync](
-        byteVector: ByteVector): F[Macaroon with Authority] = decode(byteVector)
-      .map(_.asInstanceOf[Macaroon with Authority])
+        byteVector: ByteVector): F[Macaroon with Authority] =
+      decode(byteVector).map(_.asInstanceOf[Macaroon with Authority])
   }
 }

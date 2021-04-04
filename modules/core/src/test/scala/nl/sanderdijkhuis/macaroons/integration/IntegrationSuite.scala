@@ -26,14 +26,14 @@ object IntegrationSuite extends SimpleIOSuite {
   implicit def err[F[_]: Sync]: MonadError[F, MacaroonService.Error] =
     new MonadError[F, MacaroonService.Error] {
 
-      override def flatMap[A, B](fa: F[A])(f: A => F[B]): F[B] = Sync[F]
-        .flatMap(fa)(f)
+      override def flatMap[A, B](fa: F[A])(f: A => F[B]): F[B] =
+        Sync[F].flatMap(fa)(f)
 
-      override def tailRecM[A, B](a: A)(f: A => F[Either[A, B]]): F[B] = Sync[F]
-        .tailRecM(a)(f)
+      override def tailRecM[A, B](a: A)(f: A => F[Either[A, B]]): F[B] =
+        Sync[F].tailRecM(a)(f)
 
-      override def raiseError[A](e: MacaroonService.Error): F[A] = Sync[F]
-        .raiseError(new Throwable(e.getMessage))
+      override def raiseError[A](e: MacaroonService.Error): F[A] =
+        Sync[F].raiseError(new Throwable(e.getMessage))
 
       override def handleErrorWith[A](fa: F[A])(
           f: MacaroonService.Error => F[A]): F[A] = ???
@@ -88,8 +88,8 @@ object IntegrationSuite extends SimpleIOSuite {
         val (state, i) = generate.run(lens.get(t)).value
         (lens.replace(state)(t), i)
       }
-      def identifier(i: Int) = Identifier
-        .from(refineV[NonEmpty].unsafeFrom(i.toString))
+      def identifier(i: Int) =
+        Identifier.from(refineV[NonEmpty].unsafeFrom(i.toString))
       generateInState.map(identifier)
     }
 
@@ -130,13 +130,13 @@ object IntegrationSuite extends SimpleIOSuite {
 
     private type PrincipalId = Lens[TestState, PrincipalState]
 
-    private def rootKeyRepository(id: PrincipalId) = KeyRepository
-      .inMemoryF[IO, TestState, Identifier, RootKey](
+    private def rootKeyRepository(id: PrincipalId) =
+      KeyRepository.inMemoryF[IO, TestState, Identifier, RootKey](
         id.andThen(GenLens[PrincipalState](_.rootKeys)),
         generateIdInState)
 
-    private def dischargeKeyRepository(id: PrincipalId) = KeyRepository
-      .inMemoryF[IO, TestState, Identifier, (RootKey, Predicate)](
+    private def dischargeKeyRepository(id: PrincipalId) =
+      KeyRepository.inMemoryF[IO, TestState, Identifier, (RootKey, Predicate)](
         id.andThen(GenLens[PrincipalState](_.dischargeKeys)),
         generateIdInState)
 
