@@ -57,12 +57,13 @@ object MacaroonService {
 
   class TsecLive[F[
       _]: Monad, HashAlgorithm, HmacAlgorithm, AuthCipher, AuthCipherSecretKey[
-      _]](nonceSize: Int)(implicit
+      _]](
+      buildMacKey: ByteVector => F[MacSigningKey[HmacAlgorithm]],
+      nonceSize: Int)(implicit
       mac: MessageAuth[F, HmacAlgorithm, MacSigningKey],
       hasher: CryptoHasher[Id, HashAlgorithm],
       encryptor: Encryptor[F, AuthCipher, AuthCipherSecretKey],
-      encryptionKeyGen: SymmetricKeyGen[F, AuthCipher, AuthCipherSecretKey],
-      macKeyGen: SymmetricKeyGen[F, HmacAlgorithm, MacSigningKey])
+      encryptionKeyGen: SymmetricKeyGen[F, AuthCipher, AuthCipherSecretKey])
       extends MacaroonService[F, MacSigningKey[HmacAlgorithm], Iv[AuthCipher]] {
 
     private def unsafeNonEmptyByteVector(
@@ -151,7 +152,7 @@ object MacaroonService {
           RawCipherText(content.toArray),
           Iv(nonce.toArray))
         d   <- encryptor.decrypt(c, k)
-        key <- macKeyGen.build(d)
+        key <- buildMacKey(ByteVector(d))
       } yield key
 
     def verify(
@@ -239,9 +240,10 @@ object MacaroonService {
     }
   }
 
-  implicit def pureKeyGen[F[_], A, K[_]](implicit
+  implicit def pureKeyGen[F[_], K[_]](implicit
       F: MonadError[F, Error],
-      original: SymmetricKeyGen[IO, A, K]): SymmetricKeyGen[F, A, K] = {
+      original: SymmetricKeyGen[IO, XChaCha20Poly1305, K])
+      : SymmetricKeyGen[F, XChaCha20Poly1305, K] = {
     val fk: IO ~> F = λ[IO ~> F](s =>
       s.map(_.asRight).handleErrorWith(_.getMessage.asLeft.pure[IO])
         .unsafeRunSync() match {
@@ -249,10 +251,10 @@ object MacaroonService {
         case Right(v) => v.pure[F]
       })
 
-    new SymmetricKeyGen[F, A, K] {
-      override def generateKey: F[K[A]] = ???
+    new SymmetricKeyGen[F, XChaCha20Poly1305, K] {
+      override def generateKey: F[K[XChaCha20Poly1305]] = ???
 
-      override def build(rawKey: Array[Byte]): F[K[A]] =
+      override def build(rawKey: Array[Byte]): F[K[XChaCha20Poly1305]] =
         fk(original.build(rawKey))
     }
   }
@@ -260,5 +262,9 @@ object MacaroonService {
   def apply[F[_]](implicit F: MonadError[F, Error])
       : MacaroonService[F, RootKey, InitializationVector] =
     new TsecLive[F, SHA256, HMACSHA256, XChaCha20Poly1305, BouncySecretKey](
+      v =>
+        MonadError[F, Error]
+          .fromEither(HMACSHA256.buildKey[MacErrorM](v.toArray).leftMap(t =>
+            KeyGenError(t.getMessage))),
       XChaCha20Poly1305.nonceSize)
 }
