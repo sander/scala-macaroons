@@ -35,35 +35,23 @@ object IntegrationSuite extends SimpleIOSuite {
       m_ts <- ts.addFirstPartyCaveat(m_ts, timeBefore3pm)
       (m_fs, cid) <- fs
         .addThirdPartyCaveat(m_ts, Predicate(userIsBob), asEndpoint)
-      m_fs <- fs.addFirstPartyCaveat(m_fs, chunkIs235)
-      m_fs <- fs.addFirstPartyCaveat(m_fs, operationIsRead)
-      _ <- as.getPredicate(cid)
-        .flatMapF(_.toRight(new Throwable("cound not find predicate")))
-      m_as <- as.discharge(cid)
-        .flatMapF(_.toRight(new Throwable("could not discharge")))
+      m_fs        <- fs.addFirstPartyCaveat(m_fs, chunkIs235)
+      m_fs        <- fs.addFirstPartyCaveat(m_fs, operationIsRead)
+      _           <- as.getPredicate(cid).flatMapF(handleError("no predicate"))
+      m_as        <- as.discharge(cid).flatMapF(handleError("no discharge"))
       m_as        <- as.addFirstPartyCaveat(m_as, timeBefore9am)
       m_as        <- as.addFirstPartyCaveat(m_as, ipMatch)
       m_as_sealed <- StateT.liftF(MacaroonService[F, E].bind(m_fs, m_as))
-      result <- ts.verify(
-        m_fs,
-        p =>
-          VerificationResult.from(
-            Set(
-              chunkInRange,
-              opInReadWrite,
-              timeBefore3pm,
-              chunkIs235,
-              operationIsRead,
-              timeBefore9am,
-              ipMatch).contains(p)),
-        Set(m_as_sealed)
-      )
+      result      <- ts.verify(m_fs, tsVerifier, Set(m_as_sealed))
     } yield result
     assert(program.runA(TestState()).contains(Verified))
   }
 
   //noinspection TypeAnnotation
   private object TestData {
+
+    def handleError[A](s: String)(a: Option[A]): Either[E, A] =
+      a.toRight(new Throwable(s))
 
     private val generateIdInState: State[TestState, Identifier] = {
       val generate = State((i: Int) => (i + 1, i))
@@ -91,6 +79,17 @@ object IntegrationSuite extends SimpleIOSuite {
     val operationIsRead = Identifier.from("operation = read")
     val timeBefore9am   = Identifier.from("time < 5/1/13 9am")
     val ipMatch         = Identifier.from("ip = 192.0.32.7")
+
+    def tsVerifier(p: Identifier) =
+      VerificationResult.from(
+        Set(
+          chunkInRange,
+          opInReadWrite,
+          timeBefore3pm,
+          chunkIs235,
+          operationIsRead,
+          timeBefore9am,
+          ipMatch).contains(p))
 
     case class TestState(
         ts: PrincipalState = PrincipalState(),
