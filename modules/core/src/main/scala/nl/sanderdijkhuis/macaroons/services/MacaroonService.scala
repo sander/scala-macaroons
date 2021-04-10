@@ -8,6 +8,7 @@ import eu.timepit.refined.auto._
 import eu.timepit.refined.collection._
 import eu.timepit.refined.refineV
 import nl.sanderdijkhuis.macaroons.cryptography.util._
+import nl.sanderdijkhuis.macaroons.domain.design.Risk
 import nl.sanderdijkhuis.macaroons.domain.macaroon._
 import nl.sanderdijkhuis.macaroons.domain.verification._
 import nl.sanderdijkhuis.macaroons.types.bytes._
@@ -25,6 +26,7 @@ import scala.util.chaining._
 /** Operations for generating and manipulating [[Macaroon]]s. */
 trait MacaroonService[F[_], RootKey, InitializationVector] {
 
+  @Risk("Not enforcing properties of RootKey allows for generating weak keys.")
   def generate(
       identifier: Identifier,
       rootKey: RootKey,
@@ -38,6 +40,8 @@ trait MacaroonService[F[_], RootKey, InitializationVector] {
       macaroon: Macaroon with Authority,
       identifier: Identifier): F[Macaroon with Authority]
 
+  @Risk(
+    "By letting the user specify the IV, we enable accidental re-use. Use hash(key) instead?")
   def addThirdPartyCaveat(
       macaroon: Macaroon with Authority,
       key: RootKey,
