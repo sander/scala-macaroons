@@ -9,6 +9,7 @@ import eu.timepit.refined.predicates.all.NonEmpty
 import eu.timepit.refined.refineV
 import monocle.Lens
 import monocle.macros.GenLens
+import munit.FunSuite
 import nl.sanderdijkhuis.macaroons.domain.macaroon._
 import nl.sanderdijkhuis.macaroons.domain.verification.{
   VerificationResult, Verified
@@ -18,16 +19,15 @@ import nl.sanderdijkhuis.macaroons.services.MacaroonService.RootKey
 import nl.sanderdijkhuis.macaroons.services.{MacaroonService, PrincipalService}
 import tsec.cipher.symmetric.bouncy.XChaCha20Poly1305
 import tsec.mac.jca.HMACSHA256
-import weaver._
 
-object IntegrationSuite extends SimpleIOSuite {
+class IntegrationSuite extends FunSuite {
 
   import TestData._
 
   type E    = Throwable
   type F[A] = Either[E, A]
 
-  pureTest("example from paper") {
+  test("example from paper") {
     val program: StateT[F, TestState, VerificationResult] = for {
       m_ts <- ts.assert()
       m_ts <- ts.addFirstPartyCaveat(m_ts, chunkInRange)

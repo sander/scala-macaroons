@@ -22,7 +22,7 @@ lazy val core = (project in file("modules/core")).settings(
     "org.scodec"                 %% "scodec-core"         % "1.11.7",
     "com.github.julien-truffaut" %% "monocle-core"        % "3.0.0-M4",
     "com.github.julien-truffaut" %% "monocle-macro"       % "3.0.0-M4",
-    "com.disneystreaming"        %% "weaver-cats"         % "0.6.0-M6" % Test
+    "org.scalameta"              %% "munit"               % "0.7.23" % Test
   ),
   addCompilerPlugin(
     ("org.typelevel" % "kind-projector" % "0.11.3").cross(CrossVersion.full)),
