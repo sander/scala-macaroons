@@ -1,21 +1,16 @@
 package nl.sanderdijkhuis.macaroons.services
 
 import cats._
-import cats.data._
-import cats.effect._
 import cats.implicits._
-import nl.sanderdijkhuis.macaroons.cryptography.util.{
-  CryptographyError, KeyGenError
-}
+import nl.sanderdijkhuis.macaroons.cryptography.util.CryptographyError
 import nl.sanderdijkhuis.macaroons.domain.macaroon._
 import nl.sanderdijkhuis.macaroons.domain.verification.{
   VerificationFailed, VerificationResult, Verifier
 }
 import nl.sanderdijkhuis.macaroons.repositories.KeyRepository
+import tsec.cipher.symmetric.Iv
 import tsec.cipher.symmetric.bouncy.XChaCha20Poly1305
-import tsec.keygen.symmetric.SymmetricKeyGen
 import tsec.mac.jca.{HMACSHA256, MacSigningKey}
-import tsec.cipher.symmetric.{Iv, IvGen}
 
 trait PrincipalService[F[_], ThirdParty] {
 

@@ -2,7 +2,6 @@ package nl.sanderdijkhuis.macaroons.services
 
 import cats._
 import cats.data._
-import cats.effect._
 import cats.implicits._
 import eu.timepit.refined.api.RefType.refinedRefType
 import eu.timepit.refined.auto._
@@ -17,8 +16,8 @@ import tsec.cipher.symmetric._
 import tsec.cipher.symmetric.bouncy.{BouncySecretKey, XChaCha20Poly1305}
 import tsec.hashing.CryptoHasher
 import tsec.hashing.jca.{hashOps, SHA256}
-import tsec.mac.jca.{HMACSHA256, MacErrorM, MacSigningKey}
-import tsec.mac.{MAC, MessageAuth}
+import tsec.mac.MessageAuth
+import tsec.mac.jca.{HMACSHA256, MacSigningKey}
 
 import javax.crypto.spec.SecretKeySpec
 import scala.util.chaining._
