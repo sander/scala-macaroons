@@ -7,7 +7,6 @@ lazy val core = (project in file("modules/core")).settings(
   version := "0.1.0-SNAPSHOT",
   scalaVersion := "2.13.5",
   libraryDependencies ++= Seq(
-    "org.typelevel"              %% "cats-effect"         % "2.3.1",
     "org.typelevel"              %% "cats-tagless-macros" % "0.12",
     "io.github.jmcardon"         %% "tsec-common"         % tsecVersion,
     "io.github.jmcardon"         %% "tsec-mac"            % tsecVersion,
