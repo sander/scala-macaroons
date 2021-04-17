@@ -23,7 +23,9 @@ import tsec.mac.jca.{HMACSHA256, MacSigningKey}
 import javax.crypto.spec.SecretKeySpec
 import scala.util.chaining._
 
-/** Operations for generating and manipulating [[Macaroon]]s. */
+/** Operations for generating and manipulating
+  * [[nl.sanderdijkhuis.macaroons.domain.macaroon.Macaroon]] s.
+  */
 trait MacaroonService[F[_], RootKey, InitializationVector] {
 
   @Risk("Not enforcing properties of RootKey allows for generating weak keys.")
