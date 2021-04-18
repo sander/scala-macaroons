@@ -22,16 +22,6 @@ trait PrincipalService[F[_], Operations, ThirdParty] {
 
   def discharge(identifier: Identifier): F[Option[Macaroon with Authority]]
 
-  @deprecated("Use CaveatService instead", "2021-04-18")
-  def addFirstPartyCaveat(
-      macaroon: Macaroon with Authority,
-      identifier: Identifier): F[Macaroon with Authority]
-
-  def addThirdPartyCaveat(
-      macaroon: Macaroon with Authority,
-      predicate: Predicate,
-      thirdParty: ThirdParty): F[(Macaroon with Authority, Identifier)]
-
   def verify(
       macaroon: Macaroon with Authority,
       verifier: Verifier,
@@ -78,28 +68,6 @@ object PrincipalService {
           case None => None.pure[F]
         }
       } yield m
-
-    override def addFirstPartyCaveat(
-        macaroon: Macaroon with Authority,
-        identifier: Identifier): F[Macaroon with Authority] =
-      macaroonService.addFirstPartyCaveat(macaroon, identifier)
-
-    override def addThirdPartyCaveat(
-        macaroon: Macaroon with Authority,
-        predicate: Predicate,
-        thirdParty: Context[F, MacSigningKey[HmacAlgorithm]])
-        : F[(Macaroon with Authority, Identifier)] =
-      for {
-        rootKey <- generateKey
-        cId     <- thirdParty.prepare(rootKey, predicate)
-        iv      <- generateIv
-        m <- macaroonService.addThirdPartyCaveat(
-          macaroon,
-          rootKey,
-          iv,
-          cId,
-          thirdParty.maybeLocation)
-      } yield (m, cId)
 
     override def verify(
         macaroon: Macaroon with Authority,

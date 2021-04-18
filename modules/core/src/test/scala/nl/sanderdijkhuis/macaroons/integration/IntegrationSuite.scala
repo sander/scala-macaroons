@@ -39,11 +39,10 @@ class IntegrationSuite extends FunSuite {
       (caveats.attenuate(Predicate(chunkInRange)) *>
         caveats.attenuate(Predicate(opInReadWrite)) *>
         caveats.attenuate(Predicate(timeBefore3pm))).runS(m_ts)
-      (m_fs, cid) <- fs
-        .addThirdPartyCaveat(m_ts, Predicate(userIsBob), asEndpoint)
-      m_fs <-
-      (caveats.attenuate(Predicate(chunkIs235)) *>
-        caveats.attenuate(Predicate(operationIsRead))).runS(m_fs)
+      (m_fs, cid) <-
+      (caveats.confine(asEndpoint, Predicate(userIsBob)) <*
+        caveats.attenuate(Predicate(chunkIs235)) <*
+        caveats.attenuate(Predicate(operationIsRead))).run(m_ts)
       _    <- as.getPredicate(cid).flatMapF(handleError("no predicate"))
       m_as <- as.discharge(cid).flatMapF(handleError("no discharge"))
       m_as <-
