@@ -24,7 +24,6 @@ object PhotoService {
 
   import nl.sanderdijkhuis.macaroons.repositories._
   import nl.sanderdijkhuis.macaroons.services.MacaroonService.RootKey
-  import nl.sanderdijkhuis.macaroons.services._
 
   val rootKeyRepository: KeyRepository[IO, Identifier, RootKey] = KeyRepository
     .inMemoryRef[IO, Identifier, RootKey](generateIdentifier).unsafeRunSync()
@@ -43,7 +42,7 @@ object PhotoService {
   val location: Location = Location("https://photos.example/")
 
   val M: Macaroons[IO] = Macaroons
-    .make[IO, Throwable](XChaCha20Poly1305.defaultIvGen[IO].genIv)
+    .make[IO, Throwable](Macaroons.defaultIvGenerator[IO])
 
   val A: Assertions[IO] = Assertions.make[IO, Throwable](Some(location))(
     M,
@@ -56,9 +55,12 @@ object PhotoService {
 
   // Or macaroons with caveats:
 
+  val dateBeforeApril18: Predicate =
+    Predicate(Identifier.from("date < 2021-04-18"))
+  val userIsWilleke: Predicate = Predicate(Identifier.from("user = willeke"))
+
   val attenuation: Transformation[IO, Unit] = M.caveats
-    .attenuate(Predicate(Identifier.from("date < 2021-04-18"))) *>
-    M.caveats.attenuate(Predicate(Identifier.from("user = willeke")))
+    .attenuate(dateBeforeApril18) *> M.caveats.attenuate(userIsWilleke)
 
   val m2: Macaroon with Authority = A.service.assert().flatMap(attenuation.runS)
     .unsafeRunSync()

@@ -1,7 +1,7 @@
 package nl.sanderdijkhuis.macaroons.domain
 
 import cats.Monoid
-import nl.sanderdijkhuis.macaroons.domain.macaroon.Identifier
+import nl.sanderdijkhuis.macaroons.domain.macaroon.{Identifier, Predicate}
 
 object verification {
 
@@ -28,7 +28,7 @@ object verification {
     override def isVerified: Boolean = false
   }
 
-  type Verifier = Identifier => VerificationResult
+  type Verifier = Predicate => VerificationResult
 
   implicit object VerifierMonoid extends Monoid[Verifier] {
     override def empty: Verifier                             = _ => VerificationFailed

@@ -37,18 +37,14 @@ class IntegrationSuite extends FunSuite {
     val program: StateT[F, TestState, VerificationResult] = for {
       m_ts <- ts.assert()
       m_ts <-
-      (C.attenuate(Predicate(chunkInRange)) *>
-        C.attenuate(Predicate(opInReadWrite)) *>
-        C.attenuate(Predicate(timeBefore3pm))).runS(m_ts)
+      (C.attenuate(chunkInRange) *> C.attenuate(opInReadWrite) *>
+        C.attenuate(timeBefore3pm)).runS(m_ts)
       (m_fs, cid) <-
-      (C.confine(asEndpoint, Predicate(userIsBob)) <*
-        C.attenuate(Predicate(chunkIs235)) <*
-        C.attenuate(Predicate(operationIsRead))).run(m_ts)
-      _    <- as.getPredicate(cid).flatMapF(handleError("no predicate"))
-      m_as <- as.discharge(cid).flatMapF(handleError("no discharge"))
-      m_as <-
-      (C.attenuate(Predicate(timeBefore9am)) *> C.attenuate(Predicate(ipMatch)))
-        .runS(m_as)
+      (C.confine(asEndpoint, userIsBob) <* C.attenuate(chunkIs235) <*
+        C.attenuate(operationIsRead)).run(m_ts)
+      _           <- as.getPredicate(cid).flatMapF(handleError("no predicate"))
+      m_as        <- as.discharge(cid).flatMapF(handleError("no discharge"))
+      m_as        <- (C.attenuate(timeBefore9am) *> C.attenuate(ipMatch)).runS(m_as)
       m_as_sealed <- macaroons.service.bind(m_fs, m_as)
       result      <- ts.verify(m_fs, tsVerifier, Set(m_as_sealed))
     } yield result
@@ -79,16 +75,16 @@ class IntegrationSuite extends FunSuite {
     private val authenticationServiceLocation =
       Location("https://authentication.example/")
 
-    val chunkInRange    = Identifier.from("chunk in {100...500}")
-    val opInReadWrite   = Identifier.from("op in {read, write}")
-    val timeBefore3pm   = Identifier.from("time < 5/1/13 3pm")
-    val userIsBob       = Identifier.from("user = bob")
-    val chunkIs235      = Identifier.from("chunk = 235")
-    val operationIsRead = Identifier.from("operation = read")
-    val timeBefore9am   = Identifier.from("time < 5/1/13 9am")
-    val ipMatch         = Identifier.from("ip = 192.0.32.7")
+    val chunkInRange    = Predicate(Identifier.from("chunk in {100...500}"))
+    val opInReadWrite   = Predicate(Identifier.from("op in {read, write}"))
+    val timeBefore3pm   = Predicate(Identifier.from("time < 5/1/13 3pm"))
+    val userIsBob       = Predicate(Identifier.from("user = bob"))
+    val chunkIs235      = Predicate(Identifier.from("chunk = 235"))
+    val operationIsRead = Predicate(Identifier.from("operation = read"))
+    val timeBefore9am   = Predicate(Identifier.from("time < 5/1/13 9am"))
+    val ipMatch         = Predicate(Identifier.from("ip = 192.0.32.7"))
 
-    def tsVerifier(p: Identifier) =
+    def tsVerifier(p: Predicate) =
       VerificationResult.from(
         Set(
           chunkInRange,

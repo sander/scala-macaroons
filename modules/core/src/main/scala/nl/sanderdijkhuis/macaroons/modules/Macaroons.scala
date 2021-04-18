@@ -1,5 +1,6 @@
 package nl.sanderdijkhuis.macaroons.modules
 
+import cats.effect.{IO, Sync}
 import cats.{Id, MonadError}
 import nl.sanderdijkhuis.macaroons.cryptography.util._
 import nl.sanderdijkhuis.macaroons.services.{CaveatService, MacaroonService}
@@ -29,6 +30,9 @@ object Macaroons {
       macaroonService,
       CaveatService.make(macaroonService, S.generateKey, generateIv))
   }
+
+  def defaultIvGenerator[F[_]: Sync]: F[Iv[XChaCha20Poly1305]] =
+    XChaCha20Poly1305.defaultIvGen[F].genIv
 
   type RootKey              = MacSigningKey[HMACSHA256]
   type InitializationVector = Iv[XChaCha20Poly1305]
