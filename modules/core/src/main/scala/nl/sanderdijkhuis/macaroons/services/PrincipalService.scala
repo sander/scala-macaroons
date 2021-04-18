@@ -22,7 +22,7 @@ trait PrincipalService[F[_], Operations, ThirdParty] {
 
   def discharge(identifier: Identifier): F[Option[Macaroon with Authority]]
 
-  @deprecated("Use add() instead", "2021-04-18")
+  @deprecated("Use CaveatService instead", "2021-04-18")
   def addFirstPartyCaveat(
       macaroon: Macaroon with Authority,
       identifier: Identifier): F[Macaroon with Authority]
@@ -36,10 +36,6 @@ trait PrincipalService[F[_], Operations, ThirdParty] {
       macaroon: Macaroon with Authority,
       verifier: Verifier,
       dischargeMacaroons: Set[Macaroon]): F[VerificationResult]
-
-  def add(
-      macaroon: Macaroon with Authority,
-      operations: Operations): F[Macaroon with Authority]
 }
 
 object PrincipalService {
@@ -123,11 +119,6 @@ object PrincipalService {
         case Some((_, predicate)) => Some(predicate)
         case None                 => None
       }
-
-    override def add(
-        macaroon: Macaroon with Authority,
-        operations: StateT[F, Macaroon with Authority, Unit])
-        : F[Macaroon with Authority] = operations.runS(macaroon)
   }
 
   def make[F[_], E >: CryptographyError](maybeLocation: Option[Location])(

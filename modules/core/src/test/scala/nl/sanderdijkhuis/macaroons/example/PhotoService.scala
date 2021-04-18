@@ -68,11 +68,12 @@ object PhotoService {
 
   val m2: Macaroon with Authority = (for {
     m <- principal.assert()
-    m <- principal.add(
-      m,
-      C.attenuate(Predicate(Identifier.from("date < 2021-04-18"))) *>
-        C.attenuate(Predicate(Identifier.from("user = willeke"))))
+    m <-
+    (C.attenuate(Predicate(Identifier.from("date < 2021-04-18"))) *>
+      C.attenuate(Predicate(Identifier.from("user = willeke")))).runS(m)
   } yield m).unsafeRunSync()
+
+  println(m2)
 
   // Use the codec to transfer it to the client:
 

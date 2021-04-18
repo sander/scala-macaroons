@@ -35,23 +35,20 @@ class IntegrationSuite extends FunSuite {
   test("example from paper") {
     val program: StateT[F, TestState, VerificationResult] = for {
       m_ts <- ts.assert()
-      m_ts <- ts.add(
-        m_ts,
-        caveats.attenuate(Predicate(chunkInRange)) *>
-          caveats.attenuate(Predicate(opInReadWrite)) *>
-          caveats.attenuate(Predicate(timeBefore3pm)))
+      m_ts <-
+      (caveats.attenuate(Predicate(chunkInRange)) *>
+        caveats.attenuate(Predicate(opInReadWrite)) *>
+        caveats.attenuate(Predicate(timeBefore3pm))).runS(m_ts)
       (m_fs, cid) <- fs
         .addThirdPartyCaveat(m_ts, Predicate(userIsBob), asEndpoint)
-      m_fs <- fs.add(
-        m_fs,
-        caveats.attenuate(Predicate(chunkIs235)) *>
-          caveats.attenuate(Predicate(operationIsRead)))
+      m_fs <-
+      (caveats.attenuate(Predicate(chunkIs235)) *>
+        caveats.attenuate(Predicate(operationIsRead))).runS(m_fs)
       _    <- as.getPredicate(cid).flatMapF(handleError("no predicate"))
       m_as <- as.discharge(cid).flatMapF(handleError("no discharge"))
-      m_as <- as.add(
-        m_as,
-        caveats.attenuate(Predicate(timeBefore9am)) *>
-          caveats.attenuate(Predicate(ipMatch)))
+      m_as <-
+      (caveats.attenuate(Predicate(timeBefore9am)) *>
+        caveats.attenuate(Predicate(ipMatch))).runS(m_as)
       m_as_sealed <- macaroons.bind(m_fs, m_as)
       result      <- ts.verify(m_fs, tsVerifier, Set(m_as_sealed))
     } yield result
