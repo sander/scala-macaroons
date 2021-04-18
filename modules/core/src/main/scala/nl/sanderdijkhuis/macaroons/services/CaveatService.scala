@@ -4,7 +4,7 @@ import cats.Monad
 import cats.data.StateT
 import cats.implicits._
 import nl.sanderdijkhuis.macaroons.domain.macaroon.{
-  Authority, Context, Macaroon, Predicate
+  Authority, Context, Identifier, Macaroon, Predicate
 }
 import tsec.cipher.symmetric.Iv
 import tsec.mac.jca.MacSigningKey
@@ -13,7 +13,7 @@ trait CaveatService[F[_], Context] {
 
   def attenuate(predicate: Predicate): F[Unit]
 
-  def confine(context: Context, predicate: Predicate): F[Unit]
+  def confine(context: Context, predicate: Predicate): F[Identifier]
 }
 
 object CaveatService {
@@ -36,7 +36,8 @@ object CaveatService {
 
       override def confine(
           context: Context[F, MacSigningKey[HmacAlgorithm]],
-          predicate: Predicate): StateT[F, Macaroon with Authority, Unit] =
+          predicate: Predicate)
+          : StateT[F, Macaroon with Authority, Identifier] =
         StateT(m =>
           for {
             rootKey <- generateKey
@@ -44,6 +45,6 @@ object CaveatService {
             iv      <- generateIv
             m <- macaroonService
               .addThirdPartyCaveat(m, rootKey, iv, cId, context.maybeLocation)
-          } yield (m, ()))
+          } yield (m, cId))
     }
 }
