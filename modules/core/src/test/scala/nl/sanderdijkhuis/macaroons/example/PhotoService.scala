@@ -4,6 +4,11 @@ import cats.data.StateT
 import cats.implicits._
 import nl.sanderdijkhuis.macaroons.domain.macaroon
 import nl.sanderdijkhuis.macaroons.effects.Identifiers
+import nl.sanderdijkhuis.macaroons.modules.Macaroons
+import nl.sanderdijkhuis.macaroons.services.CaveatService.{
+  StatefulCaveatService, Transformation
+}
+import tsec.cipher.symmetric.Iv
 import tsec.cipher.symmetric.bouncy.XChaCha20Poly1305
 import tsec.mac.jca.{HMACSHA256, MacSigningKey}
 
@@ -42,10 +47,10 @@ object PhotoService {
 
   val location: Location = Location("https://photos.example/")
 
-  val principal: PrincipalService[IO, StateT[
-    IO,
-    macaroon.Macaroon with macaroon.Authority,
-    Unit], macaroon.Context[IO, MacSigningKey[HMACSHA256]]] = PrincipalService
+  val principal
+      : PrincipalService[IO, StateT[IO, Macaroon with Authority, Unit], Context[
+        IO,
+        MacSigningKey[HMACSHA256]]] = PrincipalService
     .make[IO](Some(location))(rootKeyRepository, dischargeKeyRepository)
 
   // With this principal we can create new macaroons:
@@ -54,19 +59,15 @@ object PhotoService {
 
   // Or macaroons with caveats:
 
-  val C: CaveatService[StateT[IO, Macaroon with Authority, *], Context[
-    IO,
-    MacSigningKey[HMACSHA256]]] = CaveatService.make(
-    MacaroonService.apply[IO, Throwable],
-    HMACSHA256.generateKey[IO],
-    XChaCha20Poly1305.defaultIvGen[IO].genIv)
+  val M: Macaroons[IO] = Macaroons
+    .make[IO, Throwable](XChaCha20Poly1305.defaultIvGen[IO].genIv)
 
-  val m2: Macaroon with Authority = (for {
-    m <- principal.assert()
-    m <-
-    (C.attenuate(Predicate(Identifier.from("date < 2021-04-18"))) *>
-      C.attenuate(Predicate(Identifier.from("user = willeke")))).runS(m)
-  } yield m).unsafeRunSync()
+  val attenuation: Transformation[IO, Unit] = M.caveats
+    .attenuate(Predicate(Identifier.from("date < 2021-04-18"))) *>
+    M.caveats.attenuate(Predicate(Identifier.from("user = willeke")))
+
+  val m2: Macaroon with Authority = principal.assert().flatMap(attenuation.runS)
+    .unsafeRunSync()
 
   println(m2)
 
