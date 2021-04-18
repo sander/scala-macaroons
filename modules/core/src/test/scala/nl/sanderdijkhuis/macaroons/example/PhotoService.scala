@@ -71,7 +71,7 @@ object PhotoService {
     m <- principal.add(
       m,
       C.attenuate(Predicate(Identifier.from("date < 2021-04-18"))) *>
-        C.attenuate(Predicate(Identifier.from("date < 2021-04-18"))))
+        C.attenuate(Predicate(Identifier.from("user = willeke"))))
   } yield m).unsafeRunSync()
 
   // Use the codec to transfer it to the client:
