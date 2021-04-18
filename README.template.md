@@ -21,75 +21,7 @@ dependsOn(
 
 ### Baking macaroons
 
-Say we run a photo service.
-
-Specify a strategy to generate macaroon and caveat identifiers unique at this photo service. In practice you could use something like `SecureRandomId.Interactive` from [TSec](https://jmcardon.github.io/tsec/), but for now we will keep a global counter:
-
-```scala mdoc:silent
-import cats.effect._
-import nl.sanderdijkhuis.macaroons.domain.macaroon._
-
-val generateIdentifier: IO[Identifier] = {
-  var i = -1
-  IO { i += 1; Identifier.from(i) }
-}
-```
-
-Then specify a strategy to store root keys, to generate and verify macaroons:
-
-```scala mdoc:silent
-import nl.sanderdijkhuis.macaroons.repositories._
-import nl.sanderdijkhuis.macaroons.services._
-import nl.sanderdijkhuis.macaroons.services.MacaroonService.RootKey
-
-val rootKeyRepository = KeyRepository
-    .inMemoryRef[IO, Identifier, RootKey](generateIdentifier)
-    .unsafeRunSync()
-```
-
-The same for discharge keys, to generate discharges for third-party caveats:
-
-```scala mdoc:silent
-val dischargeKeyRepository = KeyRepository
-    .inMemoryRef[IO, Identifier, (RootKey, Predicate)](generateIdentifier)
-    .unsafeRunSync()
-```
-
-Now make the principal to represent our photo service:
-
-```scala mdoc:silent
-import eu.timepit.refined.auto._
-
-val location = Location("https://photos.example/")
-val principal = PrincipalService.make[IO](Some(location))(
-    rootKeyRepository, dischargeKeyRepository)
-```
-
-With this principal we can create new macaroons:
-
-```scala mdoc
-val m1 = principal.assert().unsafeRunSync()
-```
-
-Or macaroons with caveats:
-
-```scala mdoc
-val m2 = (
-  for {
-    m <- principal.assert()
-    m <- principal.addFirstPartyCaveat(m, Identifier.from("date < 2021-04-18"))
-    m <- principal.addFirstPartyCaveat(m, Identifier.from("user = willeke"))
-  } yield m
-).unsafeRunSync()
-```
-
-Use the codec to transfer it to the client:
-
-```scala mdoc
-import nl.sanderdijkhuis.macaroons.codecs.macaroon._
-
-macaroonV2.encode(m2).require.toBase64
-```
+See [PhotoService](modules/core/src/test/scala/nl/sanderdijkhuis/macaroons/example/PhotoService.scala) for an example walkthrough.
 
 ## Maintenance
 
