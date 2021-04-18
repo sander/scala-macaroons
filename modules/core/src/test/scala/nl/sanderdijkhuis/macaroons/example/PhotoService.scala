@@ -3,6 +3,7 @@ package nl.sanderdijkhuis.macaroons.example
 import cats.data.StateT
 import cats.implicits._
 import nl.sanderdijkhuis.macaroons.domain.macaroon
+import nl.sanderdijkhuis.macaroons.effects.Identifiers
 import tsec.cipher.symmetric.bouncy.XChaCha20Poly1305
 import tsec.mac.jca.{HMACSHA256, MacSigningKey}
 
@@ -11,18 +12,12 @@ object PhotoService {
   // Say we run a photo service.
   //
   // Specify a strategy to generate macaroon and caveat identifiers unique at
-  // this photo service. In practice you could use something like
-  // `SecureRandomId.Interactive` from
-  // [TSec](https://jmcardon.github.io/tsec/), but for now we will keep a
-  // global counter:
+  // this photo service:
 
   import cats.effect._
   import nl.sanderdijkhuis.macaroons.domain.macaroon._
 
-  val generateIdentifier: IO[Identifier] = {
-    var i = -1
-    IO { i += 1; Identifier.from(i) }
-  }
+  val generateIdentifier: IO[Identifier] = Identifiers[IO].make()
 
   // Then specify a strategy to store root keys, to generate and verify
   // macaroons:
