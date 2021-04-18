@@ -4,6 +4,8 @@ import cats.data._
 import cats.implicits._
 import cats.tagless._
 import cats._
+import cats.effect.Sync
+import cats.effect.concurrent.Ref
 import monocle.Lens
 
 @finalAlg @autoFunctorK
@@ -42,4 +44,24 @@ object KeyRepository {
       lens: Lens[S, Map[I, K]],
       id: State[S, I]): KeyRepository[StateT[F, S, *], I, K] =
     mapK(new InMemory(lens, id))(functorK[F, S])
+
+  private class InMemoryRef[F[_]: Monad, I, K](
+      val ref: Ref[F, Map[I, K]],
+      val generateId: F[I])
+      extends KeyRepository[F, I, K] {
+
+    override def protect(key: K): F[I] =
+      for {
+        id <- generateId
+        _  <- ref.update(_ + (id -> key))
+      } yield id
+
+    override def recover(identifier: I): F[Option[K]] =
+      ref.get.map(_.get(identifier))
+  }
+
+  def inMemoryRef[F[_]: Sync, I, K](
+      generateId: F[I]): F[KeyRepository[F, I, K]] =
+    Ref.of[F, Map[I, K]](Map.empty)
+      .map(r => new InMemoryRef[F, I, K](r, generateId))
 }

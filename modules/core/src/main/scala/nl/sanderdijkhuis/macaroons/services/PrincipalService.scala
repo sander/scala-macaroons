@@ -1,6 +1,7 @@
 package nl.sanderdijkhuis.macaroons.services
 
 import cats._
+import cats.effect.Sync
 import cats.implicits._
 import nl.sanderdijkhuis.macaroons.cryptography.util.CryptographyError
 import nl.sanderdijkhuis.macaroons.domain.macaroon._
@@ -131,4 +132,19 @@ object PrincipalService {
       MacaroonService[F, E],
       generateKey,
       generateIv)
+
+  def make[F[_]: Sync](maybeLocation: Option[Location])(
+      rootKeyRepository: KeyRepository[F, Identifier, MacSigningKey[
+        HMACSHA256]],
+      dischargeKeyRepository: KeyRepository[
+        F,
+        Identifier,
+        (MacSigningKey[HMACSHA256], Predicate)])
+      : PrincipalService[F, Endpoint[F, MacSigningKey[HMACSHA256]]] =
+    Live[F, HMACSHA256, XChaCha20Poly1305, Throwable](maybeLocation)(
+      rootKeyRepository,
+      dischargeKeyRepository,
+      MacaroonService[F, Throwable],
+      HMACSHA256.generateKey[F],
+      XChaCha20Poly1305.defaultIvGen[F].genIv)
 }

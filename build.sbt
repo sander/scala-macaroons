@@ -1,11 +1,12 @@
+ThisBuild / organizationName := "nl.sanderdijkhuis"
+ThisBuild / version := "0.1.0-SNAPSHOT"
+ThisBuild / scalaVersion := "2.13.5"
+
 val tsecVersion    = "0.2.1"
 val refinedVersion = "0.9.21"
 
 lazy val core = (project in file("modules/core")).settings(
   name := "macaroons-core",
-  organizationName := "nl.sanderdijkhuis",
-  version := "0.1.0-SNAPSHOT",
-  scalaVersion := "2.13.5",
   libraryDependencies ++= Seq(
     "org.typelevel"              %% "cats-tagless-macros" % "0.12",
     "io.github.jmcardon"         %% "tsec-common"         % tsecVersion,
@@ -35,3 +36,7 @@ lazy val core = (project in file("modules/core")).settings(
     "-feature",
     "-deprecation")
 )
+
+lazy val docs = project.in(file("macaroons-docs")).dependsOn(core)
+  .enablePlugins(MdocPlugin)
+  .settings(mdocIn := file("README.template.md"), mdocOut := file("README.md"))
