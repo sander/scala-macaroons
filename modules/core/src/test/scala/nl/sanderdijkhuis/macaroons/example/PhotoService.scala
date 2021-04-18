@@ -2,13 +2,9 @@ package nl.sanderdijkhuis.macaroons.example
 
 import cats.data.StateT
 import cats.implicits._
-import nl.sanderdijkhuis.macaroons.domain.macaroon
 import nl.sanderdijkhuis.macaroons.effects.Identifiers
 import nl.sanderdijkhuis.macaroons.modules.Macaroons
-import nl.sanderdijkhuis.macaroons.services.CaveatService.{
-  StatefulCaveatService, Transformation
-}
-import tsec.cipher.symmetric.Iv
+import nl.sanderdijkhuis.macaroons.services.CaveatService.Transformation
 import tsec.cipher.symmetric.bouncy.XChaCha20Poly1305
 import tsec.mac.jca.{HMACSHA256, MacSigningKey}
 
