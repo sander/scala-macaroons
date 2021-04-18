@@ -146,8 +146,7 @@ class IntegrationSuite extends FunSuite {
       PrincipalService.make[StateT[F, TestState, *], E](maybeLocation)(
         rootKeyRepository(id),
         dischargeKeyRepository(id),
-        StateT.liftF(unsafeGenerateKey),
-        StateT.liftF(unsafeGenerateIv))
+        StateT.liftF(unsafeGenerateKey))
 
     private def functorK[F[_]: Applicative, S]: F ~> StateT[F, S, *] =
       λ[F ~> StateT[F, S, *]](s => StateT.liftF(s))

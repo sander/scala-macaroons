@@ -39,8 +39,8 @@ object PrincipalService {
         (MacSigningKey[HmacAlgorithm], Predicate)],
       macaroonService: MacaroonService[F, MacSigningKey[HmacAlgorithm], Iv[
         AuthCipher]],
-      generateKey: F[MacSigningKey[HmacAlgorithm]],
-      generateIv: F[Iv[AuthCipher]])(implicit M: MonadError[F, E])
+      generateKey: F[MacSigningKey[HmacAlgorithm]])(implicit
+      M: MonadError[F, E])
       extends PrincipalService[F] {
 
     override def assert(): F[Macaroon with Authority] =
@@ -92,15 +92,13 @@ object PrincipalService {
         F,
         Identifier,
         (MacSigningKey[HMACSHA256], Predicate)],
-      generateKey: F[MacSigningKey[HMACSHA256]],
-      generateIv: F[Iv[XChaCha20Poly1305]])(implicit
+      generateKey: F[MacSigningKey[HMACSHA256]])(implicit
       F: MonadError[F, E]): PrincipalService[F] =
     Live[F, HMACSHA256, XChaCha20Poly1305, E](maybeLocation)(
       rootKeyRepository,
       dischargeKeyRepository,
       MacaroonService[F, E],
-      generateKey,
-      generateIv)
+      generateKey)
 
   def make[F[_]: Sync](maybeLocation: Option[Location])(
       rootKeyRepository: KeyRepository[F, Identifier, MacSigningKey[
@@ -113,6 +111,5 @@ object PrincipalService {
       rootKeyRepository,
       dischargeKeyRepository,
       MacaroonService[F, Throwable],
-      HMACSHA256.generateKey[F],
-      XChaCha20Poly1305.defaultIvGen[F].genIv)
+      HMACSHA256.generateKey[F])
 }
