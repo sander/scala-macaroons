@@ -1,15 +1,13 @@
 package nl.sanderdijkhuis.macaroons.services
 
 import cats._
-import cats.effect._
 import cats.implicits._
 import nl.sanderdijkhuis.macaroons.cryptography.util.CryptographyError
 import nl.sanderdijkhuis.macaroons.domain.macaroon._
 import nl.sanderdijkhuis.macaroons.domain.verification._
 import nl.sanderdijkhuis.macaroons.repositories.KeyRepository
 import tsec.cipher.symmetric.Iv
-import tsec.cipher.symmetric.bouncy.XChaCha20Poly1305
-import tsec.mac.jca.{HMACSHA256, MacSigningKey}
+import tsec.mac.jca.MacSigningKey
 
 trait AssertionService[F[_]] {
 
@@ -23,7 +21,7 @@ trait AssertionService[F[_]] {
 
 object AssertionService {
 
-  case class Live[F[+_], HmacAlgorithm, AuthCipher, E >: CryptographyError](
+  case class Live[F[_], HmacAlgorithm, AuthCipher, E >: CryptographyError](
       maybeLocation: Option[Location])(
       rootKeyRepository: KeyRepository[F, Identifier, MacSigningKey[
         HmacAlgorithm]],
@@ -47,11 +45,11 @@ object AssertionService {
       rootKeyRepository.recover(macaroon.id).flatMap {
         case Some(rootKey) => macaroonService
             .verify(macaroon, rootKey, verifier, dischargeMacaroons)
-        case None => VerificationFailed.pure[F]
+        case None => VerificationFailed.asInstanceOf[VerificationResult].pure[F]
       }
   }
 
-  def make[F[+_], E >: CryptographyError, HmacAlgorithm, AuthCipher](
+  def make[F[_], E >: CryptographyError, HmacAlgorithm, AuthCipher](
       maybeLocation: Option[Location])(
       macaroonService: MacaroonService[F, MacSigningKey[HmacAlgorithm], Iv[
         AuthCipher]],

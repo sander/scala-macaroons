@@ -1,54 +1,32 @@
 package nl.sanderdijkhuis.macaroons.services
 
 import cats._
-import cats.effect.Sync
 import cats.implicits._
 import nl.sanderdijkhuis.macaroons.cryptography.util.CryptographyError
 import nl.sanderdijkhuis.macaroons.domain.macaroon._
-import nl.sanderdijkhuis.macaroons.domain.verification.{
-  VerificationFailed, VerificationResult, Verifier
-}
 import nl.sanderdijkhuis.macaroons.repositories.KeyRepository
 import tsec.cipher.symmetric.Iv
 import tsec.cipher.symmetric.bouncy.XChaCha20Poly1305
 import tsec.mac.jca.{HMACSHA256, MacSigningKey}
 
-trait PrincipalService[F[_]] {
-
-  def assert(): F[Macaroon with Authority]
+trait DischargeService[F[_]] {
 
   def getPredicate(identifier: Identifier): F[Option[Predicate]]
 
   def discharge(identifier: Identifier): F[Option[Macaroon with Authority]]
-
-  def verify(
-      macaroon: Macaroon with Authority,
-      verifier: Verifier,
-      dischargeMacaroons: Set[Macaroon]): F[VerificationResult]
 }
 
-object PrincipalService {
+object DischargeService {
 
   case class Live[F[_], HmacAlgorithm, AuthCipher, E >: CryptographyError](
       maybeLocation: Option[Location])(
-      rootKeyRepository: KeyRepository[F, Identifier, MacSigningKey[
-        HmacAlgorithm]],
       dischargeKeyRepository: KeyRepository[
         F,
         Identifier,
         (MacSigningKey[HmacAlgorithm], Predicate)],
       macaroonService: MacaroonService[F, MacSigningKey[HmacAlgorithm], Iv[
-        AuthCipher]],
-      generateKey: F[MacSigningKey[HmacAlgorithm]])(implicit
-      M: MonadError[F, E])
-      extends PrincipalService[F] {
-
-    override def assert(): F[Macaroon with Authority] =
-      for {
-        rootKey <- generateKey
-        cId     <- rootKeyRepository.protect(rootKey)
-        m       <- macaroonService.generate(cId, rootKey, maybeLocation)
-      } yield m
+        AuthCipher]])(implicit M: MonadError[F, E])
+      extends DischargeService[F] {
 
     override def discharge(
         identifier: Identifier): F[Option[Macaroon with Authority]] =
@@ -65,19 +43,6 @@ object PrincipalService {
         }
       } yield m
 
-    override def verify(
-        macaroon: Macaroon with Authority,
-        verifier: Verifier,
-        dischargeMacaroons: Set[Macaroon]): F[VerificationResult] =
-      for {
-        rootKey <- rootKeyRepository.recover(macaroon.id)
-        result <- rootKey match {
-          case Some(rootKey) => macaroonService
-              .verify(macaroon, rootKey, verifier, dischargeMacaroons)
-          case None => VerificationFailed.pure[F]
-        }
-      } yield result
-
     override def getPredicate(identifier: Identifier): F[Option[Predicate]] =
       dischargeKeyRepository.recover(identifier).map {
         case Some((_, predicate)) => Some(predicate)
@@ -88,17 +53,12 @@ object PrincipalService {
   def make[F[_], E >: CryptographyError](maybeLocation: Option[Location])(
       macaroonService: MacaroonService[F, MacSigningKey[HMACSHA256], Iv[
         XChaCha20Poly1305]],
-      rootKeyRepository: KeyRepository[F, Identifier, MacSigningKey[
-        HMACSHA256]],
       dischargeKeyRepository: KeyRepository[
         F,
         Identifier,
-        (MacSigningKey[HMACSHA256], Predicate)],
-      generateKey: F[MacSigningKey[HMACSHA256]])(implicit
-      F: MonadError[F, E]): PrincipalService[F] =
+        (MacSigningKey[HMACSHA256], Predicate)])(implicit
+      F: MonadError[F, E]): DischargeService[F] =
     Live[F, HMACSHA256, XChaCha20Poly1305, E](maybeLocation)(
-      rootKeyRepository,
       dischargeKeyRepository,
-      macaroonService,
-      generateKey)
+      macaroonService)
 }

@@ -1,11 +1,10 @@
 package nl.sanderdijkhuis.macaroons.modules
 
-import cats.{Id, Monad, MonadError}
-import nl.sanderdijkhuis.macaroons.cryptography
+import cats.{Id, MonadError}
 import nl.sanderdijkhuis.macaroons.cryptography.util._
 import nl.sanderdijkhuis.macaroons.services.{CaveatService, MacaroonService}
-import tsec.cipher.symmetric.{Encryptor, Iv}
 import tsec.cipher.symmetric.bouncy.{BouncySecretKey, XChaCha20Poly1305}
+import tsec.cipher.symmetric.{Encryptor, Iv}
 import tsec.hashing.CryptoHasher
 import tsec.hashing.jca.SHA256
 import tsec.keygen.symmetric.SymmetricKeyGen

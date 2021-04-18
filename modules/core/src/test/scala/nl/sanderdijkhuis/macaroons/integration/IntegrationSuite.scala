@@ -3,6 +3,7 @@ package nl.sanderdijkhuis.macaroons.integration
 import cats.data._
 import cats.effect._
 import cats.implicits._
+import cats.tagless.Derive
 import cats.{~>, Applicative}
 import eu.timepit.refined.api.RefType.refinedRefType
 import eu.timepit.refined.auto._
@@ -16,16 +17,13 @@ import nl.sanderdijkhuis.macaroons.domain.macaroon._
 import nl.sanderdijkhuis.macaroons.domain.verification.{
   VerificationResult, Verified
 }
+import nl.sanderdijkhuis.macaroons.modules.{Assertions, Discharges, Macaroons}
 import nl.sanderdijkhuis.macaroons.repositories.KeyRepository
-import nl.sanderdijkhuis.macaroons.services.MacaroonService.{
-  InitializationVector, RootKey
-}
-import nl.sanderdijkhuis.macaroons.services.{
-  CaveatService, MacaroonService, PrincipalService
-}
+import nl.sanderdijkhuis.macaroons.services.MacaroonService.RootKey
+import tsec.cipher.symmetric.Encryptor
 import tsec.cipher.symmetric.bouncy.{BouncySecretKey, XChaCha20Poly1305}
-import tsec.hashing.jca.SHA256
-import tsec.mac.jca.HMACSHA256
+import tsec.keygen.symmetric.SymmetricKeyGen
+import tsec.mac.jca.{HMACSHA256, MacSigningKey}
 
 class IntegrationSuite extends FunSuite {
 
@@ -35,22 +33,23 @@ class IntegrationSuite extends FunSuite {
   type F[A] = Either[E, A]
 
   test("example from paper") {
+    val C = macaroons.caveats
     val program: StateT[F, TestState, VerificationResult] = for {
       m_ts <- ts.assert()
       m_ts <-
-      (caveats.attenuate(Predicate(chunkInRange)) *>
-        caveats.attenuate(Predicate(opInReadWrite)) *>
-        caveats.attenuate(Predicate(timeBefore3pm))).runS(m_ts)
+      (C.attenuate(Predicate(chunkInRange)) *>
+        C.attenuate(Predicate(opInReadWrite)) *>
+        C.attenuate(Predicate(timeBefore3pm))).runS(m_ts)
       (m_fs, cid) <-
-      (caveats.confine(asEndpoint, Predicate(userIsBob)) <*
-        caveats.attenuate(Predicate(chunkIs235)) <*
-        caveats.attenuate(Predicate(operationIsRead))).run(m_ts)
+      (C.confine(asEndpoint, Predicate(userIsBob)) <*
+        C.attenuate(Predicate(chunkIs235)) <*
+        C.attenuate(Predicate(operationIsRead))).run(m_ts)
       _    <- as.getPredicate(cid).flatMapF(handleError("no predicate"))
       m_as <- as.discharge(cid).flatMapF(handleError("no discharge"))
       m_as <-
-      (caveats.attenuate(Predicate(timeBefore9am)) *>
-        caveats.attenuate(Predicate(ipMatch))).runS(m_as)
-      m_as_sealed <- macaroons.bind(m_fs, m_as)
+      (C.attenuate(Predicate(timeBefore9am)) *> C.attenuate(Predicate(ipMatch)))
+        .runS(m_as)
+      m_as_sealed <- macaroons.service.bind(m_fs, m_as)
       result      <- ts.verify(m_fs, tsVerifier, Set(m_as_sealed))
     } yield result
     assert(program.runA(TestState()).contains(Verified))
@@ -135,41 +134,47 @@ class IntegrationSuite extends FunSuite {
     private def functorK[F[_]: Applicative, S]: F ~> StateT[F, S, *] =
       λ[F ~> StateT[F, S, *]](s => StateT.liftF(s))
 
-    implicit private val e = encryptor[F, E]
+    val macaroons: Macaroons[StateT[F, TestState, *]] = {
+      type G[A] = StateT[F, TestState, A]
+      implicit val s: SymmetricKeyGen[G, HMACSHA256, MacSigningKey] = Derive
+        .functorK[SymmetricKeyGen[*[_], HMACSHA256, MacSigningKey]].mapK[F, G](
+          implicitly[SymmetricKeyGen[F, HMACSHA256, MacSigningKey]])(functorK)
+      implicit val e: Encryptor[G, XChaCha20Poly1305, BouncySecretKey] = Derive
+        .functorK[Encryptor[*[_], XChaCha20Poly1305, BouncySecretKey]]
+        .mapK[F, G](encryptor[F, E])(functorK)
+      Macaroons.make[G, E](StateT.liftF(unsafeGenerateIv))
+    }
 
-    val macaroons: MacaroonService[
-      StateT[F, TestState, *],
-      RootKey,
-      InitializationVector] = MacaroonService.mapK(
-      MacaroonService
-        .make[F, E, SHA256, HMACSHA256, XChaCha20Poly1305, BouncySecretKey](
-          buildMacKey[F, E],
-          buildSecretKey[F, E],
-          XChaCha20Poly1305.nonceSize))(functorK[F, TestState])
-
-    private def unsafePrincipal(
+    private def unsafeDischarges(
         id: PrincipalId,
-        maybeLocation: Option[Location]) =
-      PrincipalService.make[StateT[F, TestState, *], E](maybeLocation)(
+        maybeLocation: Option[Location])
+        : Discharges[StateT[F, TestState, *]] = {
+      type G[A] = StateT[F, TestState, A]
+      Discharges
+        .make[G, E](maybeLocation)(macaroons, dischargeKeyRepository(id))
+    }
+
+    private def unsafeAssertions(
+        id: PrincipalId,
+        maybeLocation: Option[Location])
+        : Assertions[StateT[F, TestState, *]] = {
+      type G[A] = StateT[F, TestState, A]
+      Assertions.make[G, E](maybeLocation)(
         macaroons,
         rootKeyRepository(id),
-        dischargeKeyRepository(id),
         StateT.liftF(unsafeGenerateKey))
-
-    val caveats = CaveatService
-      .make[StateT[F, TestState, *], HMACSHA256, XChaCha20Poly1305](
-        macaroons,
-        functorK[F, TestState].apply(unsafeGenerateKey),
-        functorK[F, TestState].apply(unsafeGenerateIv))
+    }
 
     val ts =
-      unsafePrincipal(GenLens[TestState](_.ts), targetServiceLocation.some)
+      unsafeAssertions(GenLens[TestState](_.ts), targetServiceLocation.some)
+        .service
 
     val fs =
-      unsafePrincipal(GenLens[TestState](_.fs), forumServiceLocation.some)
+      unsafeDischarges(GenLens[TestState](_.fs), forumServiceLocation.some)
+        .service
 
-    val as = unsafePrincipal(
+    val as = unsafeDischarges(
       GenLens[TestState](_.as),
-      authenticationServiceLocation.some)
+      authenticationServiceLocation.some).service
   }
 }
