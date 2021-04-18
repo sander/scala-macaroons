@@ -27,7 +27,6 @@ trait PrincipalService[F[_], Operations, ThirdParty] {
       macaroon: Macaroon with Authority,
       identifier: Identifier): F[Macaroon with Authority]
 
-  @deprecated("To be replaced by a more usable add()", "2021-04-18")
   def addThirdPartyCaveat(
       macaroon: Macaroon with Authority,
       predicate: Predicate,
