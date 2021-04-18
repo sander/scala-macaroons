@@ -3,6 +3,7 @@ package nl.sanderdijkhuis.macaroons.integration
 import cats.data._
 import cats.effect._
 import cats.implicits._
+import cats.{~>, Applicative}
 import eu.timepit.refined.api.RefType.refinedRefType
 import eu.timepit.refined.auto._
 import eu.timepit.refined.predicates.all.NonEmpty
@@ -15,8 +16,12 @@ import nl.sanderdijkhuis.macaroons.domain.verification.{
   VerificationResult, Verified
 }
 import nl.sanderdijkhuis.macaroons.repositories.KeyRepository
-import nl.sanderdijkhuis.macaroons.services.MacaroonService.RootKey
-import nl.sanderdijkhuis.macaroons.services.{MacaroonService, PrincipalService}
+import nl.sanderdijkhuis.macaroons.services.MacaroonService.{
+  InitializationVector, RootKey
+}
+import nl.sanderdijkhuis.macaroons.services.{
+  CaveatService, MacaroonService, PrincipalService
+}
 import tsec.cipher.symmetric.bouncy.XChaCha20Poly1305
 import tsec.mac.jca.HMACSHA256
 
@@ -30,18 +35,24 @@ class IntegrationSuite extends FunSuite {
   test("example from paper") {
     val program: StateT[F, TestState, VerificationResult] = for {
       m_ts <- ts.assert()
-      m_ts <- ts.addFirstPartyCaveat(m_ts, chunkInRange)
-      m_ts <- ts.addFirstPartyCaveat(m_ts, opInReadWrite)
-      m_ts <- ts.addFirstPartyCaveat(m_ts, timeBefore3pm)
+      m_ts <- ts.add(
+        m_ts,
+        caveats.attenuate(Predicate(chunkInRange)) *>
+          caveats.attenuate(Predicate(opInReadWrite)) *>
+          caveats.attenuate(Predicate(timeBefore3pm)))
       (m_fs, cid) <- fs
         .addThirdPartyCaveat(m_ts, Predicate(userIsBob), asEndpoint)
-      m_fs        <- fs.addFirstPartyCaveat(m_fs, chunkIs235)
-      m_fs        <- fs.addFirstPartyCaveat(m_fs, operationIsRead)
-      _           <- as.getPredicate(cid).flatMapF(handleError("no predicate"))
-      m_as        <- as.discharge(cid).flatMapF(handleError("no discharge"))
-      m_as        <- as.addFirstPartyCaveat(m_as, timeBefore9am)
-      m_as        <- as.addFirstPartyCaveat(m_as, ipMatch)
-      m_as_sealed <- StateT.liftF(MacaroonService[F, E].bind(m_fs, m_as))
+      m_fs <- fs.add(
+        m_fs,
+        caveats.attenuate(Predicate(chunkIs235)) *>
+          caveats.attenuate(Predicate(operationIsRead)))
+      _    <- as.getPredicate(cid).flatMapF(handleError("no predicate"))
+      m_as <- as.discharge(cid).flatMapF(handleError("no discharge"))
+      m_as <- as.add(
+        m_as,
+        caveats.attenuate(Predicate(timeBefore9am)) *>
+          caveats.attenuate(Predicate(ipMatch)))
+      m_as_sealed <- macaroons.bind(m_fs, m_as)
       result      <- ts.verify(m_fs, tsVerifier, Set(m_as_sealed))
     } yield result
     assert(program.runA(TestState()).contains(Verified))
@@ -107,7 +118,7 @@ class IntegrationSuite extends FunSuite {
       GenLens[TestState](_.as),
       authenticationServiceLocation.some)
 
-    val asEndpoint = Endpoint[StateT[F, TestState, *], RootKey](
+    val asEndpoint = Context[StateT[F, TestState, *], RootKey](
       Some(authenticationServiceLocation),
       (v, w) => dischargeKeyRepository(GenLens[TestState](_.as)).protect(v, w))
 
@@ -141,5 +152,20 @@ class IntegrationSuite extends FunSuite {
         dischargeKeyRepository(id),
         StateT.liftF(unsafeGenerateKey),
         StateT.liftF(unsafeGenerateIv))
+
+    private def functorK[F[_]: Applicative, S]: F ~> StateT[F, S, *] =
+      λ[F ~> StateT[F, S, *]](s => StateT.liftF(s))
+
+    val macaroons: MacaroonService[
+      StateT[F, TestState, *],
+      RootKey,
+      InitializationVector] = MacaroonService
+      .mapK(MacaroonService[F, E])(functorK[F, TestState])
+
+    val caveats = CaveatService
+      .make[StateT[F, TestState, *], HMACSHA256, XChaCha20Poly1305](
+        macaroons,
+        functorK[F, TestState].apply(unsafeGenerateKey),
+        functorK[F, TestState].apply(unsafeGenerateIv))
   }
 }

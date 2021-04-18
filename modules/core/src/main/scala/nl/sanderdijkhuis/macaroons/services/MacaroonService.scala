@@ -3,6 +3,7 @@ package nl.sanderdijkhuis.macaroons.services
 import cats._
 import cats.data._
 import cats.implicits._
+import cats.tagless.{autoFunctorK, finalAlg}
 import eu.timepit.refined.api.RefType.refinedRefType
 import eu.timepit.refined.auto._
 import eu.timepit.refined.collection._
@@ -24,6 +25,7 @@ import javax.crypto.spec.SecretKeySpec
 import scala.util.chaining._
 
 /** Operations for generating and manipulating [[Macaroon]]s. */
+@finalAlg @autoFunctorK
 trait MacaroonService[F[_], RootKey, InitializationVector] {
 
   @Risk("Not enforcing properties of RootKey allows for generating weak keys.")

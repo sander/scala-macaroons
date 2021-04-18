@@ -57,7 +57,7 @@ object macaroon {
       tag: AuthenticationTag)
 
   /** Represents a remote principal. */
-  case class Endpoint[F[_], RootKey](
+  case class Context[F[_], RootKey](
       maybeLocation: Option[Location],
       prepare: (RootKey, Predicate) => F[Identifier])
 }

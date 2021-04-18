@@ -1,6 +1,7 @@
 package nl.sanderdijkhuis.macaroons.services
 
 import cats._
+import cats.data.StateT
 import cats.effect.Sync
 import cats.implicits._
 import nl.sanderdijkhuis.macaroons.cryptography.util.CryptographyError
@@ -13,7 +14,7 @@ import tsec.cipher.symmetric.Iv
 import tsec.cipher.symmetric.bouncy.XChaCha20Poly1305
 import tsec.mac.jca.{HMACSHA256, MacSigningKey}
 
-trait PrincipalService[F[_], ThirdParty] {
+trait PrincipalService[F[_], Operations, ThirdParty] {
 
   def assert(): F[Macaroon with Authority]
 
@@ -21,10 +22,12 @@ trait PrincipalService[F[_], ThirdParty] {
 
   def discharge(identifier: Identifier): F[Option[Macaroon with Authority]]
 
+  @deprecated("Use add() instead", "2021-04-18")
   def addFirstPartyCaveat(
       macaroon: Macaroon with Authority,
       identifier: Identifier): F[Macaroon with Authority]
 
+  @deprecated("To be replaced by a more usable add()", "2021-04-18")
   def addThirdPartyCaveat(
       macaroon: Macaroon with Authority,
       predicate: Predicate,
@@ -34,6 +37,10 @@ trait PrincipalService[F[_], ThirdParty] {
       macaroon: Macaroon with Authority,
       verifier: Verifier,
       dischargeMacaroons: Set[Macaroon]): F[VerificationResult]
+
+  def add(
+      macaroon: Macaroon with Authority,
+      operations: Operations): F[Macaroon with Authority]
 }
 
 object PrincipalService {
@@ -50,7 +57,10 @@ object PrincipalService {
         AuthCipher]],
       generateKey: F[MacSigningKey[HmacAlgorithm]],
       generateIv: F[Iv[AuthCipher]])(implicit M: MonadError[F, E])
-      extends PrincipalService[F, Endpoint[F, MacSigningKey[HmacAlgorithm]]] {
+      extends PrincipalService[
+        F,
+        StateT[F, Macaroon with Authority, Unit],
+        Context[F, MacSigningKey[HmacAlgorithm]]] {
 
     override def assert(): F[Macaroon with Authority] =
       for {
@@ -82,7 +92,7 @@ object PrincipalService {
     override def addThirdPartyCaveat(
         macaroon: Macaroon with Authority,
         predicate: Predicate,
-        thirdParty: Endpoint[F, MacSigningKey[HmacAlgorithm]])
+        thirdParty: Context[F, MacSigningKey[HmacAlgorithm]])
         : F[(Macaroon with Authority, Identifier)] =
       for {
         rootKey <- generateKey
@@ -114,6 +124,11 @@ object PrincipalService {
         case Some((_, predicate)) => Some(predicate)
         case None                 => None
       }
+
+    override def add(
+        macaroon: Macaroon with Authority,
+        operations: StateT[F, Macaroon with Authority, Unit])
+        : F[Macaroon with Authority] = operations.runS(macaroon)
   }
 
   def make[F[_], E >: CryptographyError](maybeLocation: Option[Location])(
@@ -125,7 +140,9 @@ object PrincipalService {
         (MacSigningKey[HMACSHA256], Predicate)],
       generateKey: F[MacSigningKey[HMACSHA256]],
       generateIv: F[Iv[XChaCha20Poly1305]])(implicit F: MonadError[F, E])
-      : PrincipalService[F, Endpoint[F, MacSigningKey[HMACSHA256]]] =
+      : PrincipalService[F, StateT[F, Macaroon with Authority, Unit], Context[
+        F,
+        MacSigningKey[HMACSHA256]]] =
     Live[F, HMACSHA256, XChaCha20Poly1305, E](maybeLocation)(
       rootKeyRepository,
       dischargeKeyRepository,
@@ -140,7 +157,9 @@ object PrincipalService {
         F,
         Identifier,
         (MacSigningKey[HMACSHA256], Predicate)])
-      : PrincipalService[F, Endpoint[F, MacSigningKey[HMACSHA256]]] =
+      : PrincipalService[F, StateT[F, Macaroon with Authority, Unit], Context[
+        F,
+        MacSigningKey[HMACSHA256]]] =
     Live[F, HMACSHA256, XChaCha20Poly1305, Throwable](maybeLocation)(
       rootKeyRepository,
       dischargeKeyRepository,
