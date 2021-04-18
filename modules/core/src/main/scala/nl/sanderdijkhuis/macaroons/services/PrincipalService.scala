@@ -1,7 +1,6 @@
 package nl.sanderdijkhuis.macaroons.services
 
 import cats._
-import cats.data.StateT
 import cats.effect.Sync
 import cats.implicits._
 import nl.sanderdijkhuis.macaroons.cryptography.util.CryptographyError
@@ -14,7 +13,7 @@ import tsec.cipher.symmetric.Iv
 import tsec.cipher.symmetric.bouncy.XChaCha20Poly1305
 import tsec.mac.jca.{HMACSHA256, MacSigningKey}
 
-trait PrincipalService[F[_], Operations, ThirdParty] {
+trait PrincipalService[F[_]] {
 
   def assert(): F[Macaroon with Authority]
 
@@ -42,10 +41,7 @@ object PrincipalService {
         AuthCipher]],
       generateKey: F[MacSigningKey[HmacAlgorithm]],
       generateIv: F[Iv[AuthCipher]])(implicit M: MonadError[F, E])
-      extends PrincipalService[
-        F,
-        StateT[F, Macaroon with Authority, Unit],
-        Context[F, MacSigningKey[HmacAlgorithm]]] {
+      extends PrincipalService[F] {
 
     override def assert(): F[Macaroon with Authority] =
       for {
@@ -97,10 +93,8 @@ object PrincipalService {
         Identifier,
         (MacSigningKey[HMACSHA256], Predicate)],
       generateKey: F[MacSigningKey[HMACSHA256]],
-      generateIv: F[Iv[XChaCha20Poly1305]])(implicit F: MonadError[F, E])
-      : PrincipalService[F, StateT[F, Macaroon with Authority, Unit], Context[
-        F,
-        MacSigningKey[HMACSHA256]]] =
+      generateIv: F[Iv[XChaCha20Poly1305]])(implicit
+      F: MonadError[F, E]): PrincipalService[F] =
     Live[F, HMACSHA256, XChaCha20Poly1305, E](maybeLocation)(
       rootKeyRepository,
       dischargeKeyRepository,
@@ -114,10 +108,7 @@ object PrincipalService {
       dischargeKeyRepository: KeyRepository[
         F,
         Identifier,
-        (MacSigningKey[HMACSHA256], Predicate)])
-      : PrincipalService[F, StateT[F, Macaroon with Authority, Unit], Context[
-        F,
-        MacSigningKey[HMACSHA256]]] =
+        (MacSigningKey[HMACSHA256], Predicate)]): PrincipalService[F] =
     Live[F, HMACSHA256, XChaCha20Poly1305, Throwable](maybeLocation)(
       rootKeyRepository,
       dischargeKeyRepository,

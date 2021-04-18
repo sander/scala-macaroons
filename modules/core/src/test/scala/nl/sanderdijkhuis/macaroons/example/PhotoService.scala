@@ -43,10 +43,7 @@ object PhotoService {
 
   val location: Location = Location("https://photos.example/")
 
-  val principal
-      : PrincipalService[IO, StateT[IO, Macaroon with Authority, Unit], Context[
-        IO,
-        MacSigningKey[HMACSHA256]]] = PrincipalService
+  val principal: PrincipalService[IO] = PrincipalService
     .make[IO](Some(location))(rootKeyRepository, dischargeKeyRepository)
 
   // With this principal we can create new macaroons:
