@@ -1,11 +1,15 @@
 package nl.sanderdijkhuis.macaroons.modules
 
-import cats.MonadError
-import nl.sanderdijkhuis.macaroons.cryptography.util.CryptographyError
+import cats.{Id, Monad, MonadError}
+import nl.sanderdijkhuis.macaroons.cryptography
+import nl.sanderdijkhuis.macaroons.cryptography.util._
 import nl.sanderdijkhuis.macaroons.services.{CaveatService, MacaroonService}
-import tsec.cipher.symmetric.Iv
-import tsec.cipher.symmetric.bouncy.XChaCha20Poly1305
+import tsec.cipher.symmetric.{Encryptor, Iv}
+import tsec.cipher.symmetric.bouncy.{BouncySecretKey, XChaCha20Poly1305}
+import tsec.hashing.CryptoHasher
+import tsec.hashing.jca.SHA256
 import tsec.keygen.symmetric.SymmetricKeyGen
+import tsec.mac.MessageAuth
 import tsec.mac.jca.{HMACSHA256, MacSigningKey}
 
 object Macaroons {
@@ -13,8 +17,15 @@ object Macaroons {
   def make[F[_], E >: CryptographyError](
       generateIv: F[InitializationVector])(implicit
       F: MonadError[F, E],
-      S: SymmetricKeyGen[F, HMACSHA256, MacSigningKey]): Macaroons[F] = {
-    val macaroonService = MacaroonService[F, E]
+      S: SymmetricKeyGen[F, HMACSHA256, MacSigningKey],
+      mac: MessageAuth[F, HMACSHA256, MacSigningKey],
+      hasher: CryptoHasher[Id, SHA256],
+      encryptor: Encryptor[F, XChaCha20Poly1305, BouncySecretKey])
+      : Macaroons[F] = {
+    val macaroonService = MacaroonService.make(
+      buildMacKey[F, E],
+      buildSecretKey[F, E],
+      XChaCha20Poly1305.nonceSize)
     Macaroons[F](
       macaroonService,
       CaveatService.make(macaroonService, S.generateKey, generateIv))

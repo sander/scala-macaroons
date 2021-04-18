@@ -11,6 +11,7 @@ import eu.timepit.refined.refineV
 import monocle.Lens
 import monocle.macros.GenLens
 import munit.FunSuite
+import nl.sanderdijkhuis.macaroons.cryptography.util._
 import nl.sanderdijkhuis.macaroons.domain.macaroon._
 import nl.sanderdijkhuis.macaroons.domain.verification.{
   VerificationResult, Verified
@@ -22,7 +23,8 @@ import nl.sanderdijkhuis.macaroons.services.MacaroonService.{
 import nl.sanderdijkhuis.macaroons.services.{
   CaveatService, MacaroonService, PrincipalService
 }
-import tsec.cipher.symmetric.bouncy.XChaCha20Poly1305
+import tsec.cipher.symmetric.bouncy.{BouncySecretKey, XChaCha20Poly1305}
+import tsec.hashing.jca.SHA256
 import tsec.mac.jca.HMACSHA256
 
 class IntegrationSuite extends FunSuite {
@@ -104,16 +106,6 @@ class IntegrationSuite extends FunSuite {
         as: PrincipalState = PrincipalState(),
         nextInt: Int = 0)
 
-    val ts =
-      unsafePrincipal(GenLens[TestState](_.ts), targetServiceLocation.some)
-
-    val fs =
-      unsafePrincipal(GenLens[TestState](_.fs), forumServiceLocation.some)
-
-    val as = unsafePrincipal(
-      GenLens[TestState](_.as),
-      authenticationServiceLocation.some)
-
     val asEndpoint = Context[StateT[F, TestState, *], RootKey](
       Some(authenticationServiceLocation),
       (v, w) => dischargeKeyRepository(GenLens[TestState](_.as)).protect(v, w))
@@ -140,27 +132,44 @@ class IntegrationSuite extends FunSuite {
     private def unsafeGenerateIv =
       XChaCha20Poly1305.defaultIvGen[IO].genIv.attempt.unsafeRunSync()
 
-    private def unsafePrincipal(
-        id: PrincipalId,
-        maybeLocation: Option[Location]) =
-      PrincipalService.make[StateT[F, TestState, *], E](maybeLocation)(
-        rootKeyRepository(id),
-        dischargeKeyRepository(id),
-        StateT.liftF(unsafeGenerateKey))
-
     private def functorK[F[_]: Applicative, S]: F ~> StateT[F, S, *] =
       λ[F ~> StateT[F, S, *]](s => StateT.liftF(s))
+
+    implicit private val e = encryptor[F, E]
 
     val macaroons: MacaroonService[
       StateT[F, TestState, *],
       RootKey,
-      InitializationVector] = MacaroonService
-      .mapK(MacaroonService[F, E])(functorK[F, TestState])
+      InitializationVector] = MacaroonService.mapK(
+      MacaroonService
+        .make[F, E, SHA256, HMACSHA256, XChaCha20Poly1305, BouncySecretKey](
+          buildMacKey[F, E],
+          buildSecretKey[F, E],
+          XChaCha20Poly1305.nonceSize))(functorK[F, TestState])
+
+    private def unsafePrincipal(
+        id: PrincipalId,
+        maybeLocation: Option[Location]) =
+      PrincipalService.make[StateT[F, TestState, *], E](maybeLocation)(
+        macaroons,
+        rootKeyRepository(id),
+        dischargeKeyRepository(id),
+        StateT.liftF(unsafeGenerateKey))
 
     val caveats = CaveatService
       .make[StateT[F, TestState, *], HMACSHA256, XChaCha20Poly1305](
         macaroons,
         functorK[F, TestState].apply(unsafeGenerateKey),
         functorK[F, TestState].apply(unsafeGenerateIv))
+
+    val ts =
+      unsafePrincipal(GenLens[TestState](_.ts), targetServiceLocation.some)
+
+    val fs =
+      unsafePrincipal(GenLens[TestState](_.fs), forumServiceLocation.some)
+
+    val as = unsafePrincipal(
+      GenLens[TestState](_.as),
+      authenticationServiceLocation.some)
   }
 }

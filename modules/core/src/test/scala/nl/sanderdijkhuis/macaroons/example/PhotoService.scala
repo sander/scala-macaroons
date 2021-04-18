@@ -1,12 +1,11 @@
 package nl.sanderdijkhuis.macaroons.example
 
-import cats.data.StateT
 import cats.implicits._
 import nl.sanderdijkhuis.macaroons.effects.Identifiers
 import nl.sanderdijkhuis.macaroons.modules.Macaroons
 import nl.sanderdijkhuis.macaroons.services.CaveatService.Transformation
 import tsec.cipher.symmetric.bouncy.XChaCha20Poly1305
-import tsec.mac.jca.{HMACSHA256, MacSigningKey}
+import tsec.mac.jca.HMACSHA256
 
 object PhotoService {
 
@@ -43,24 +42,27 @@ object PhotoService {
 
   val location: Location = Location("https://photos.example/")
 
-  val principal: PrincipalService[IO] = PrincipalService
-    .make[IO](Some(location))(rootKeyRepository, dischargeKeyRepository)
+  val M: Macaroons[IO] = Macaroons
+    .make[IO, Throwable](XChaCha20Poly1305.defaultIvGen[IO].genIv)
+
+  val assertions: AssertionService[IO] = AssertionService
+    .make[IO, Throwable, HMACSHA256, XChaCha20Poly1305](Some(location))(
+      M.service,
+      rootKeyRepository,
+      HMACSHA256.generateKey[IO])
 
   // With this principal we can create new macaroons:
 
-  val m1: Macaroon with Authority = principal.assert().unsafeRunSync()
+  val m1: Macaroon with Authority = assertions.assert().unsafeRunSync()
 
   // Or macaroons with caveats:
-
-  val M: Macaroons[IO] = Macaroons
-    .make[IO, Throwable](XChaCha20Poly1305.defaultIvGen[IO].genIv)
 
   val attenuation: Transformation[IO, Unit] = M.caveats
     .attenuate(Predicate(Identifier.from("date < 2021-04-18"))) *>
     M.caveats.attenuate(Predicate(Identifier.from("user = willeke")))
 
-  val m2: Macaroon with Authority = principal.assert().flatMap(attenuation.runS)
-    .unsafeRunSync()
+  val m2: Macaroon with Authority = assertions.assert()
+    .flatMap(attenuation.runS).unsafeRunSync()
 
   println(m2)
 

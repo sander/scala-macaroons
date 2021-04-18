@@ -86,6 +86,8 @@ object PrincipalService {
   }
 
   def make[F[_], E >: CryptographyError](maybeLocation: Option[Location])(
+      macaroonService: MacaroonService[F, MacSigningKey[HMACSHA256], Iv[
+        XChaCha20Poly1305]],
       rootKeyRepository: KeyRepository[F, Identifier, MacSigningKey[
         HMACSHA256]],
       dischargeKeyRepository: KeyRepository[
@@ -97,19 +99,6 @@ object PrincipalService {
     Live[F, HMACSHA256, XChaCha20Poly1305, E](maybeLocation)(
       rootKeyRepository,
       dischargeKeyRepository,
-      MacaroonService[F, E],
+      macaroonService,
       generateKey)
-
-  def make[F[_]: Sync](maybeLocation: Option[Location])(
-      rootKeyRepository: KeyRepository[F, Identifier, MacSigningKey[
-        HMACSHA256]],
-      dischargeKeyRepository: KeyRepository[
-        F,
-        Identifier,
-        (MacSigningKey[HMACSHA256], Predicate)]): PrincipalService[F] =
-    Live[F, HMACSHA256, XChaCha20Poly1305, Throwable](maybeLocation)(
-      rootKeyRepository,
-      dischargeKeyRepository,
-      MacaroonService[F, Throwable],
-      HMACSHA256.generateKey[F])
 }

@@ -197,13 +197,30 @@ object MacaroonService {
   type RootKey              = MacSigningKey[HMACSHA256]
   type InitializationVector = Iv[XChaCha20Poly1305]
 
-  def apply[F[_], E >: CryptographyError](implicit F: MonadError[F, E])
-      : MacaroonService[F, RootKey, InitializationVector] = {
-    implicit val e: Encryptor[F, XChaCha20Poly1305, BouncySecretKey] =
-      encryptor[F, E]
-    new TsecLive[F, SHA256, HMACSHA256, XChaCha20Poly1305, BouncySecretKey](
-      buildMacKey[F, E],
-      buildEncryptionKey[F, E],
-      XChaCha20Poly1305.nonceSize)
-  }
+  def make[F[
+      _]: Monad, E >: CryptographyError, HashAlgorithm, HmacAlgorithm, AuthCipher, AuthCipherSecretKey[
+      _]](
+      buildMacKey: ByteVector => F[MacSigningKey[HmacAlgorithm]],
+      buildSecretKey: ByteVector => F[AuthCipherSecretKey[AuthCipher]],
+      nonceSize: Int)(implicit
+      mac: MessageAuth[F, HmacAlgorithm, MacSigningKey],
+      hasher: CryptoHasher[Id, HashAlgorithm],
+      encryptor: Encryptor[F, AuthCipher, AuthCipherSecretKey])
+      : MacaroonService[F, MacSigningKey[HmacAlgorithm], Iv[AuthCipher]] =
+    new TsecLive[
+      F,
+      HashAlgorithm,
+      HmacAlgorithm,
+      AuthCipher,
+      AuthCipherSecretKey](buildMacKey, buildSecretKey, nonceSize)
+
+//  def apply[F[_], E >: CryptographyError](implicit F: MonadError[F, E])
+//      : MacaroonService[F, RootKey, InitializationVector] = {
+//    implicit val e: Encryptor[F, XChaCha20Poly1305, BouncySecretKey] =
+//      encryptor[F, E]
+//    new TsecLive[F, SHA256, HMACSHA256, XChaCha20Poly1305, BouncySecretKey](
+//      buildMacKey[F, E],
+//      buildEncryptionKey[F, E],
+//      XChaCha20Poly1305.nonceSize)
+//  }
 }

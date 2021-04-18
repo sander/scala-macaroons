@@ -61,7 +61,7 @@ object util {
     F.fromEither(HMACSHA256.buildKey[MacErrorM](in.toArray).leftMap(t =>
       KeyGenError(t.getMessage)))
 
-  def buildEncryptionKey[F[_], E >: CryptographyError](in: ByteVector)(implicit
+  def buildSecretKey[F[_], E >: CryptographyError](in: ByteVector)(implicit
       F: MonadError[F, E]): F[BouncySecretKey[XChaCha20Poly1305]] = {
     val key = XChaCha20Poly1305.defaultKeyGen[IO].build(in.toArray).attempt
       .unsafeRunSync()
