@@ -7,6 +7,7 @@ import eu.timepit.refined.types.string.NonEmptyString
 import io.estatico.newtype.macros.newtype
 import scodec.bits.ByteVector
 import nl.sanderdijkhuis.macaroons.types.bytes._
+import scodec.codecs.utf8
 
 import scala.util.chaining._
 import scala.language.implicitConversions
@@ -28,6 +29,10 @@ object macaroon {
     def from(string: NonEmptyString): Identifier =
       ByteVector.encodeUtf8(string).toOption
         .flatMap(v => refineV[NonEmpty](v).toOption).get.pipe(Identifier.apply)
+
+    def from(i: Int): Identifier =
+      Identifier(
+        refineV[NonEmpty].unsafeFrom(utf8.encode(i.toString).require.bytes))
   }
 
   // TODO apply more

@@ -27,17 +27,12 @@ Specify a strategy to generate macaroon and caveat identifiers unique at this ph
 
 ```scala
 import cats.effect._
-import cats.effect.concurrent._
-import eu.timepit.refined.refineV
-import eu.timepit.refined.collection._
 import nl.sanderdijkhuis.macaroons.domain.macaroon._
-import tsec.common._
-import scodec.bits._
 
-val generateIdentifier: IO[Identifier] = Ref.of[IO, Int](0)
-    .unsafeRunSync()
-    .modify(i => (i + 1, Identifier.from(
-        refineV[NonEmpty].unsafeFrom(s"$i"))))
+val generateIdentifier: IO[Identifier] = {
+  var i = -1
+  IO { i += 1; Identifier.from(i) }
+}
 ```
 
 Then specify a strategy to store root keys, to generate and verify macaroons:
@@ -78,7 +73,7 @@ val m1 = principal.assert().unsafeRunSync()
 //   maybeLocation = Some(value = https://photos.example/),
 //   id = ByteVector(1 bytes, 0x30),
 //   caveats = Vector(),
-//   tag = ByteVector(32 bytes, 0x37325f14fe809437fba25b7ffa92d8581bada0da5a8d8192aaf77e8b4cd748bc)
+//   tag = ByteVector(32 bytes, 0x57ce26058b253d83d3d821dd3c81b41082270950c52db56dac16084e1334b713)
 // )
 ```
 
@@ -107,7 +102,7 @@ val m2 = (
 //       maybeChallenge = None
 //     )
 //   ),
-//   tag = ByteVector(32 bytes, 0xe1958f4b25718c7eb373ada98a21342cc415834078c9b0612d12e05388b1fa4f)
+//   tag = ByteVector(32 bytes, 0xe8e71edc61be65a51a13018c9b854124a824448a71e6074725bc10bdc81ce149)
 // )
 ```
 
@@ -117,7 +112,7 @@ Use the codec to transfer it to the client:
 import nl.sanderdijkhuis.macaroons.codecs.macaroon._
 
 macaroonV2.encode(m2).require.toBase64
-// res0: String = "AgEXaHR0cHM6Ly9waG90b3MuZXhhbXBsZS8CATEAAhFkYXRlIDwgMjAyMS0wNC0xOAACDnVzZXIgPSB3aWxsZWtlAAAGIOGVj0slcYx+s3OtqYohNCzEFYNAeMmwYS0S4FOIsfpP"
+// res0: String = "AgEXaHR0cHM6Ly9waG90b3MuZXhhbXBsZS8CATEAAhFkYXRlIDwgMjAyMS0wNC0xOAACDnVzZXIgPSB3aWxsZWtlAAAGIOjnHtxhvmWlGhMBjJuFQSSoJESKceYHRyW8EL3IHOFJ"
 ```
 
 ## Maintenance

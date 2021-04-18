@@ -27,17 +27,12 @@ Specify a strategy to generate macaroon and caveat identifiers unique at this ph
 
 ```scala mdoc:silent
 import cats.effect._
-import cats.effect.concurrent._
-import eu.timepit.refined.refineV
-import eu.timepit.refined.collection._
 import nl.sanderdijkhuis.macaroons.domain.macaroon._
-import tsec.common._
-import scodec.bits._
 
-val generateIdentifier: IO[Identifier] = Ref.of[IO, Int](0)
-    .unsafeRunSync()
-    .modify(i => (i + 1, Identifier.from(
-        refineV[NonEmpty].unsafeFrom(s"$i"))))
+val generateIdentifier: IO[Identifier] = {
+  var i = -1
+  IO { i += 1; Identifier.from(i) }
+}
 ```
 
 Then specify a strategy to store root keys, to generate and verify macaroons:
