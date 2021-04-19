@@ -75,7 +75,7 @@ Before sharing the macaroon with the user, we can attenuate the access:
 val dateBeforeApril18 = Predicate.from("date < 2021-04-18")
 val userIsWilleke     = Predicate.from("user = willeke")
 
-val transformation: Transformation[IO, Unit] = {
+val transformation = {
   import assertions.macaroons.caveats._
   attenuate(dateBeforeApril18) *> attenuate(userIsWilleke)
 }
@@ -91,9 +91,8 @@ Whenever a user makes a request with this macaroon, we can authorize the request
 
 ```scala mdoc:silent
 val someOtherPredicate = Predicate.from("ip = 192.168.0.1")
-val predicatesForThisRequest = Set(
-  dateBeforeApril18, userIsWilleke, someOtherPredicate
-)
+val predicatesForThisRequest =
+  Set(dateBeforeApril18, userIsWilleke, someOtherPredicate)
 ```
 
 Note that although we are using a set, we can use any function `Predicate => Boolean`. To verify, again:
