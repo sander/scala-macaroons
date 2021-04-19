@@ -32,20 +32,20 @@ class IntegrationSuite extends FunSuite {
   test("example from paper") {
     import macaroons.caveats._
     val program: StateT[F, TestState, Boolean] = for {
-      m_ts <- ts.assert() >>= {
+      mTS <- ts.assert() >>= {
         attenuate(chunkInRange) *> attenuate(opInReadWrite) *>
           attenuate(timeBefore3pm)
       }.runS
-      (m_fs, cid) <- {
+      (mFS, cid) <- {
         confine(asEndpoint, userIsBob) <* attenuate(chunkIs235) <*
           attenuate(operationIsRead)
-      }.run(m_ts)
+      }.run(mTS)
       _ <- as.getPredicate(cid).flatMapF(handleError("no predicate"))
-      m_as <- as.discharge(cid).flatMapF(handleError("no discharge")) >>= {
+      mAS <- as.discharge(cid).flatMapF(handleError("no discharge")) >>= {
         attenuate(timeBefore9am) *> attenuate(ipMatch)
       }.runS
-      m_as_sealed <- macaroons.binding.bind(m_fs, m_as)
-      result      <- ts.verify(m_fs, tsVerifier, Set(m_as_sealed))
+      mASs   <- macaroons.binding.bind(mFS, mAS)
+      result <- ts.verify(mFS, tsVerifier, Set(mASs))
     } yield result
     assert(program.runA(TestState()).contains(true))
   }
