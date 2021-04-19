@@ -14,9 +14,6 @@ import monocle.macros.GenLens
 import munit.FunSuite
 import nl.sanderdijkhuis.macaroons.cryptography.util._
 import nl.sanderdijkhuis.macaroons.domain.macaroon._
-import nl.sanderdijkhuis.macaroons.domain.verification.{
-  VerificationResult, Verified
-}
 import nl.sanderdijkhuis.macaroons.modules.{Assertions, Discharges, Macaroons}
 import nl.sanderdijkhuis.macaroons.repositories.KeyRepository
 import nl.sanderdijkhuis.macaroons.services.MacaroonService.RootKey
@@ -34,7 +31,7 @@ class IntegrationSuite extends FunSuite {
 
   test("example from paper") {
     val C = macaroons.caveats
-    val program: StateT[F, TestState, VerificationResult] = for {
+    val program: StateT[F, TestState, Boolean] = for {
       m_ts <- ts.assert()
       m_ts <-
       (C.attenuate(chunkInRange) *> C.attenuate(opInReadWrite) *>
@@ -48,7 +45,7 @@ class IntegrationSuite extends FunSuite {
       m_as_sealed <- macaroons.service.bind(m_fs, m_as)
       result      <- ts.verify(m_fs, tsVerifier, Set(m_as_sealed))
     } yield result
-    assert(program.runA(TestState()).contains(Verified))
+    assert(program.runA(TestState()).contains(true))
   }
 
   //noinspection TypeAnnotation
@@ -84,16 +81,14 @@ class IntegrationSuite extends FunSuite {
     val timeBefore9am   = Predicate(Identifier.from("time < 5/1/13 9am"))
     val ipMatch         = Predicate(Identifier.from("ip = 192.0.32.7"))
 
-    def tsVerifier(p: Predicate) =
-      VerificationResult.from(
-        Set(
-          chunkInRange,
-          opInReadWrite,
-          timeBefore3pm,
-          chunkIs235,
-          operationIsRead,
-          timeBefore9am,
-          ipMatch).contains(p))
+    val tsVerifier = Set(
+      chunkInRange,
+      opInReadWrite,
+      timeBefore3pm,
+      chunkIs235,
+      operationIsRead,
+      timeBefore9am,
+      ipMatch)
 
     case class TestState(
         ts: PrincipalState = PrincipalState(),

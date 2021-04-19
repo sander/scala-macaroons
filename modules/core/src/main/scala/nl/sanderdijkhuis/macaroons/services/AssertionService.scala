@@ -16,7 +16,7 @@ trait AssertionService[F[_]] {
   def verify(
       macaroon: Macaroon with Authority,
       verifier: Verifier,
-      dischargeMacaroons: Set[Macaroon]): F[VerificationResult]
+      dischargeMacaroons: Set[Macaroon]): F[Boolean]
 }
 
 object AssertionService {
@@ -41,11 +41,11 @@ object AssertionService {
     override def verify(
         macaroon: Macaroon with Authority,
         verifier: Verifier,
-        dischargeMacaroons: Set[Macaroon]): F[VerificationResult] =
+        dischargeMacaroons: Set[Macaroon]): F[Boolean] =
       rootKeyRepository.recover(macaroon.id).flatMap {
         case Some(rootKey) => macaroonService
             .verify(macaroon, rootKey, verifier, dischargeMacaroons)
-        case None => VerificationFailed.asInstanceOf[VerificationResult].pure[F]
+        case None => false.pure[F]
       }
   }
 

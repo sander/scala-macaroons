@@ -55,7 +55,7 @@ trait MacaroonService[F[_], RootKey, InitializationVector] {
       macaroon: Macaroon with Authority,
       key: RootKey,
       verifier: Verifier,
-      Ms: Set[Macaroon]): F[VerificationResult]
+      Ms: Set[Macaroon]): F[Boolean]
 }
 
 object MacaroonService {
@@ -164,7 +164,7 @@ object MacaroonService {
         macaroon: Macaroon with Authority,
         key: MacSigningKey[HmacAlgorithm],
         verifier: Verifier,
-        macaroons: Set[Macaroon]): F[VerificationResult] = {
+        macaroons: Set[Macaroon]): F[Boolean] = {
 
       def helper(
           discharge: Option[Macaroon],
@@ -177,7 +177,7 @@ object MacaroonService {
           }
         val verifications = tags.sequence.map(_.zip(M.caveats))
           .flatMap(_.traverse {
-            case (_, Caveat(_, cId, None)) => verifier(cId).isVerified.pure[F]
+            case (_, Caveat(_, cId, None)) => verifier(Predicate(cId)).pure[F]
             case (cSig, Caveat(_, id, Some(vId))) => decrypt(cSig, vId)
                 .flatMap { key =>
                   macaroons.filter(_.id == id).toList
@@ -190,7 +190,7 @@ object MacaroonService {
         (verifications, tagValidates).mapN((a, b) => a && b)
       }
 
-      helper(None, key).map(VerificationResult.from)
+      helper(None, key)
     }
   }
 
