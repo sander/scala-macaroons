@@ -54,7 +54,13 @@ object macaroon {
   case class Caveat(
       maybeLocation: Option[Location],
       identifier: Identifier,
-      maybeChallenge: Option[Challenge])
+      maybeChallenge: Option[Challenge]) {
+
+    override def toString: String =
+      s"Caveat{${maybeLocation.map(m => s"$m,").getOrElse("")}${utf8
+        .decode(identifier.value.bits).map(_.value).getOrElse(
+          identifier.toString)}${maybeChallenge.map(m => s",$m").getOrElse("")}}"
+  }
 
   case class Macaroon(
       maybeLocation: Option[Location],
