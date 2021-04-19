@@ -1,11 +1,12 @@
 package nl.sanderdijkhuis.macaroons.effects
 
+import nl.sanderdijkhuis.macaroons.domain._
+import nl.sanderdijkhuis.macaroons.types._
+
 import cats.effect._
-import eu.timepit.refined.predicates.all.NonEmpty
+import eu.timepit.refined.predicates.all._
 import eu.timepit.refined.refineV
-import nl.sanderdijkhuis.macaroons.domain.macaroon.Identifier
-import nl.sanderdijkhuis.macaroons.types.bytes._
-import scodec.bits.ByteVector
+import scodec.bits._
 import tsec.common.ManagedRandom
 
 trait Identifiers[F[_]] {

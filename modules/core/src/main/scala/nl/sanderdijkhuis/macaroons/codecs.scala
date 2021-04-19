@@ -1,15 +1,23 @@
-package nl.sanderdijkhuis.macaroons.codecs
+package nl.sanderdijkhuis.macaroons
+
+import nl.sanderdijkhuis.macaroons.domain._
 
 import cats.effect._
 import cats.implicits._
-import nl.sanderdijkhuis.macaroons.codecs.util._
-import nl.sanderdijkhuis.macaroons.domain.macaroon._
-import scodec.Attempt.Successful
-import scodec._
+import eu.timepit.refined.collection._
+import eu.timepit.refined.refineV
+import eu.timepit.refined.types.string._
+import types._
+import scodec.Attempt._
 import scodec.bits._
 import scodec.codecs._
+import scodec._
 
-object macaroon {
+import scala.annotation.tailrec
+
+object codecs {
+
+  import util._
 
   private val version: Codec[Unit]      = "version" | constant(hex"02")
   private val endOfSection: Codec[Unit] = "eos" | constant(hex"00")
@@ -67,5 +75,43 @@ object macaroon {
     def decodeAuthorizing[F[_]: Sync](
         byteVector: ByteVector): F[Macaroon with Authority] =
       decode(byteVector).map(_.asInstanceOf[Macaroon with Authority])
+  }
+
+  private[macaroons] object util {
+
+    val nonEmptyBytes: Codec[NonEmptyByteVector] = bytes
+      .exmap[NonEmptyByteVector](
+        b =>
+          refineV[NonEmpty](b) match {
+            case Left(e)  => Attempt.failure(Err(e))
+            case Right(n) => Attempt.successful(n)
+          },
+        n => Attempt.successful(n.value))
+
+    val nonEmptyUtf8: Codec[NonEmptyString] = utf8.exmap[NonEmptyString](
+      string =>
+        refineV[NonEmpty](string) match {
+          case Left(e)  => Attempt.failure(Err(e))
+          case Right(n) => Attempt.successful(n)
+        },
+      nonEmptyString => Attempt.successful(nonEmptyString.value)
+    )
+
+    def seeWhatHappensVector[A](codec: Codec[A]): Codec[Vector[A]] =
+      Codec[Vector[A]](
+        Encoder.encodeSeq(codec.asEncoder)(_),
+        (bits: BitVector) => {
+          @tailrec
+          def helper(
+              rest: BitVector,
+              acc: Vector[A]): Attempt[DecodeResult[Vector[A]]] =
+            codec.decode(rest) match {
+              case Successful(DecodeResult(v, rem)) => helper(rem, acc :+ v)
+              case Failure(_)                       => successful(DecodeResult(acc, rest))
+            }
+
+          helper(bits, Vector.empty)
+        }
+      )
   }
 }

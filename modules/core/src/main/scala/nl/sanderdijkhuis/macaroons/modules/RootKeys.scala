@@ -1,10 +1,9 @@
 package nl.sanderdijkhuis.macaroons.modules
 
-import cats.effect._
-import cats.implicits._
-import nl.sanderdijkhuis.macaroons.domain.macaroon._
-import nl.sanderdijkhuis.macaroons.effects._
+import nl.sanderdijkhuis.macaroons.domain._
 import nl.sanderdijkhuis.macaroons.repositories._
+
+import cats.effect._
 import tsec.mac.jca
 import tsec.mac.jca._
 

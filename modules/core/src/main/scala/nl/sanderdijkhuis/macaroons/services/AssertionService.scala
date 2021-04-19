@@ -1,11 +1,11 @@
 package nl.sanderdijkhuis.macaroons.services
 
+import nl.sanderdijkhuis.macaroons.cryptography._
+import nl.sanderdijkhuis.macaroons.domain._
+import nl.sanderdijkhuis.macaroons.repositories._
+
 import cats._
 import cats.implicits._
-import nl.sanderdijkhuis.macaroons.cryptography.util.CryptographyError
-import nl.sanderdijkhuis.macaroons.domain.macaroon._
-import nl.sanderdijkhuis.macaroons.domain.verification._
-import nl.sanderdijkhuis.macaroons.repositories.KeyRepository
 import tsec.cipher.symmetric.Iv
 import tsec.mac.jca.MacSigningKey
 
@@ -15,8 +15,8 @@ trait AssertionService[F[_]] {
 
   def verify(
       macaroon: Macaroon with Authority,
-      verifier: Verifier,
-      dischargeMacaroons: Set[Macaroon]): F[Boolean]
+      verifier: Verifier = Set.empty,
+      dischargeMacaroons: Set[Macaroon] = Set.empty): F[Boolean]
 }
 
 object AssertionService {

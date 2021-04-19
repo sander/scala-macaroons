@@ -1,10 +1,11 @@
-package nl.sanderdijkhuis.macaroons.codecs
+package nl.sanderdijkhuis.macaroons
 
-import munit.FunSuite
 import nl.sanderdijkhuis.macaroons.codecs.util.seeWhatHappensVector
+
+import munit._
 import scodec.bits._
 import scodec.codecs.constant
-import scodec.{Attempt, DecodeResult}
+import scodec._
 
 class UtilCodecSpec extends FunSuite {
 

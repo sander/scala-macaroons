@@ -1,8 +1,8 @@
-package nl.sanderdijkhuis.macaroons.domain
+package nl.sanderdijkhuis.design
 
 import scala.annotation.Annotation
 
-object design {
+object domain {
 
   case class Risk(description: String) extends Annotation
 }

@@ -1,6 +1,6 @@
 package nl.sanderdijkhuis.macaroons.services
 
-import nl.sanderdijkhuis.macaroons.domain.macaroon.{Authority, Macaroon}
+import nl.sanderdijkhuis.macaroons.domain._
 
 trait BindingService[F[_]] {
 

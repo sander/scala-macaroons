@@ -1,15 +1,15 @@
-package nl.sanderdijkhuis.macaroons.cryptography
+package nl.sanderdijkhuis.macaroons
 
-import cats._
 import cats.effect._
+import cats._
 import cats.implicits._
-import scodec.bits.ByteVector
-import tsec.cipher.symmetric.bouncy.{BouncySecretKey, XChaCha20Poly1305}
-import tsec.cipher.symmetric.{CipherText, Encryptor, Iv, PlainText}
-import tsec.mac.jca.{HMACSHA256, MacErrorM, MacSigningKey}
-import tsec.mac.{MAC, MessageAuth}
+import scodec.bits._
+import tsec.cipher.symmetric.bouncy._
+import tsec.cipher.symmetric._
+import tsec.mac.jca._
+import tsec.mac._
 
-object util {
+object cryptography {
 
   sealed trait CryptographyError            extends Throwable
   case class EncryptionError(value: String) extends CryptographyError

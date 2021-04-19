@@ -1,14 +1,12 @@
 package nl.sanderdijkhuis.macaroons.modules
 
-import cats.MonadError
-import nl.sanderdijkhuis.macaroons.cryptography.util.CryptographyError
-import nl.sanderdijkhuis.macaroons.domain.macaroon.{
-  Identifier, Location, Predicate
-}
-import nl.sanderdijkhuis.macaroons.repositories.KeyRepository
-import nl.sanderdijkhuis.macaroons.services.{AssertionService, DischargeService}
-import tsec.cipher.symmetric.bouncy.XChaCha20Poly1305
-import tsec.mac.jca.{HMACSHA256, MacSigningKey}
+import nl.sanderdijkhuis.macaroons.cryptography._
+import nl.sanderdijkhuis.macaroons.domain._
+import nl.sanderdijkhuis.macaroons.repositories._
+import nl.sanderdijkhuis.macaroons.services._
+
+import cats._
+import tsec.mac.jca._
 
 object Discharges {
 

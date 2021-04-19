@@ -1,18 +1,17 @@
 package nl.sanderdijkhuis.macaroons.modules
 
-import cats.effect.{IO, Sync}
-import cats.{Id, MonadError}
-import nl.sanderdijkhuis.macaroons.cryptography.util._
-import nl.sanderdijkhuis.macaroons.services.{
-  BindingService, CaveatService, MacaroonService
-}
-import tsec.cipher.symmetric.bouncy.{BouncySecretKey, XChaCha20Poly1305}
-import tsec.cipher.symmetric.{Encryptor, Iv}
-import tsec.hashing.CryptoHasher
-import tsec.hashing.jca.SHA256
-import tsec.keygen.symmetric.SymmetricKeyGen
-import tsec.mac.MessageAuth
-import tsec.mac.jca.{HMACSHA256, MacSigningKey}
+import nl.sanderdijkhuis.macaroons.cryptography._
+import nl.sanderdijkhuis.macaroons.services._
+
+import cats._
+import cats.effect._
+import tsec.cipher.symmetric.bouncy._
+import tsec.cipher.symmetric._
+import tsec.hashing._
+import tsec.hashing.jca._
+import tsec.keygen.symmetric._
+import tsec.mac._
+import tsec.mac.jca._
 
 object Macaroons {
 

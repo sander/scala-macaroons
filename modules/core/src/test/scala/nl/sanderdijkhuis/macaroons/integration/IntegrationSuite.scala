@@ -12,8 +12,8 @@ import eu.timepit.refined.refineV
 import monocle.Lens
 import monocle.macros.GenLens
 import munit.FunSuite
-import nl.sanderdijkhuis.macaroons.cryptography.util._
-import nl.sanderdijkhuis.macaroons.domain.macaroon._
+import nl.sanderdijkhuis.macaroons.cryptography._
+import nl.sanderdijkhuis.macaroons.domain._
 import nl.sanderdijkhuis.macaroons.modules.{Assertions, Discharges, Macaroons}
 import nl.sanderdijkhuis.macaroons.repositories.KeyRepository
 import nl.sanderdijkhuis.macaroons.services.MacaroonService.RootKey

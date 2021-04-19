@@ -8,7 +8,7 @@ It uses the [libmacaroons binary format](https://github.com/rescrv/libmacaroons/
 
 ## Getting started
 
-### Adding `scala-macaroons` as a dependency
+### Depending on Macaroons for Scala
 
 Add to `build.sbt`:
 
@@ -18,10 +18,6 @@ dependsOn(
     uri("git://github.com/sander/scala-macaroons.git#main"),
     "core"))
 ```
-
-### Baking macaroons
-
-Say we run a photo service.
 
 Import language dependencies:
 
@@ -34,61 +30,72 @@ import eu.timepit.refined.auto._
 Import macaroons dependencies:
 
 ```scala
-import nl.sanderdijkhuis.macaroons.codecs.macaroon._
+import nl.sanderdijkhuis.macaroons.codecs._
 import nl.sanderdijkhuis.macaroons.effects._
-import nl.sanderdijkhuis.macaroons.domain.macaroon._
+import nl.sanderdijkhuis.macaroons.domain._
 import nl.sanderdijkhuis.macaroons.modules._
 import nl.sanderdijkhuis.macaroons.repositories._
 ```
 
-Specify a strategy to generate macaroon and caveat identifiers unique at this photo service:
+### Baking macaroons
+
+Say we run a photo service and we want to use macaroons to manage authorizations.
+
+First, we specify how to generate locally unique identifiers, how to protect root keys, and how to make and verify assertions:
 
 ```scala
 val identifiers: Identifiers[IO] = Identifiers.secureRandom
+val rootKeys: RootKeys[IO]       = RootKeys.makeInMemory().unsafeRunSync()
+val assertions: Assertions[IO]   = Assertions.make(rootKeys.repository)
 ```
 
-Then specify a strategy to store root keys, to generate and verify macaroons:
+Now we can mint a new macaroon:
 
 ```scala
-val rootKeys: RootKeys[IO] = RootKeys.makeInMemory().unsafeRunSync()
-```
-
-Now make the principal module to represent our photo service:
-
-```scala
-val assertions: Assertions[IO] = Assertions.make(rootKeys.repository)
-```
-
-With this principal we can create new macaroons:
-
-```scala
-val m1: Macaroon with Authority = assertions.service.assert().unsafeRunSync()
-// m1: Macaroon with Authority = Macaroon(
+val macaroon = assertions.service.assert().unsafeRunSync()
+// macaroon: Macaroon with Authority = Macaroon(
 //   maybeLocation = None,
-//   id = ByteVector(16 bytes, 0x18d49160dc630726098b42516284aa09),
+//   id = ByteVector(16 bytes, 0x0af6164e766fda002cc664931bfa1672),
 //   caveats = Vector(),
-//   tag = ByteVector(32 bytes, 0x59ad1a35bf3a2a6d62e361544a78a7490b0fe811df29d031dc181026dc5e6e29)
+//   tag = ByteVector(32 bytes, 0xf4236e364db6692da17908a2763de186c2a4dda1ab8d8287c902add1aa85fc9a)
 // )
 ```
 
-Or define some caveats:
+We can serialize it to transfer it to the client:
 
 ```scala
-val dateBeforeApril18: Predicate = Predicate.from("date < 2021-04-18")
-val userIsWilleke: Predicate     = Predicate.from("user = willeke")
-
-val M: Macaroons[IO] = assertions.macaroons
-val attenuation: Transformation[IO, Unit] =
-  M.caveats.attenuate(dateBeforeApril18) *> M.caveats.attenuate(userIsWilleke)
+macaroonV2.encode(macaroon).require.toBase64
+// res0: String = "AgIQCvYWTnZv2gAsxmSTG/oWcgAABiD0I242TbZpLaF5CKJ2PeGGwqTdoauNgofJAq3RqoX8mg=="
 ```
 
-And bake a macaroon with these:
+Now, when the client would get back to us with this macaroon, we could verify it:
 
 ```scala
-val m2: Macaroon with Authority = attenuation.runS(m1).unsafeRunSync()
-// m2: Macaroon with Authority = Macaroon(
+assertions.service.verify(macaroon).unsafeRunSync()
+// res1: Boolean = true
+```
+
+### Adding caveats
+
+Before sharing the macaroon with the user, we can attenuate the access:
+
+```scala
+val dateBeforeApril18 = Predicate.from("date < 2021-04-18")
+val userIsWilleke     = Predicate.from("user = willeke")
+
+val transformation: Transformation[IO, Unit] = {
+  import assertions.macaroons.caveats._
+  attenuate(dateBeforeApril18) *> attenuate(userIsWilleke)
+}
+```
+
+And bake a macaroon with this transformation:
+
+```scala
+val macaroon2 = transformation.runS(macaroon).unsafeRunSync()
+// macaroon2: Macaroon with Authority = Macaroon(
 //   maybeLocation = None,
-//   id = ByteVector(16 bytes, 0x18d49160dc630726098b42516284aa09),
+//   id = ByteVector(16 bytes, 0x0af6164e766fda002cc664931bfa1672),
 //   caveats = Vector(
 //     Caveat(
 //       maybeLocation = None,
@@ -101,16 +108,29 @@ val m2: Macaroon with Authority = attenuation.runS(m1).unsafeRunSync()
 //       maybeChallenge = None
 //     )
 //   ),
-//   tag = ByteVector(32 bytes, 0x82c7a4226a002e1ec75b71eba39587e9e8ebf1143840fb18d208d4a86e99b0e4)
+//   tag = ByteVector(32 bytes, 0xc0f20700f570b9592eca23ef6de5e9faec0e1ccdaeaed9f705ca54b5f5362168)
 // )
 ```
 
-Use the codec to transfer it to the client:
+Whenever a user makes a request with this macaroon, we can authorize the request by verifying the macaroon to a set of true predicates:
 
 ```scala
-macaroonV2.encode(m2).require.toBase64
-// res0: String = "AgIQGNSRYNxjByYJi0JRYoSqCQACEWRhdGUgPCAyMDIxLTA0LTE4AAIOdXNlciA9IHdpbGxla2UAAAYggsekImoALh7HW3Hro5WH6ejr8RQ4QPsY0gjUqG6ZsOQ="
+val someOtherPredicate = Predicate.from("ip = 192.168.0.1")
+val predicatesForThisRequest = Set(
+  dateBeforeApril18, userIsWilleke, someOtherPredicate
+)
 ```
+
+Note that although we are using a set, we can use any function `Predicate => Boolean`. To verify, again:
+
+```scala
+assertions.service.verify(macaroon2, predicatesForThisRequest).unsafeRunSync()
+// res2: Boolean = true
+```
+
+### Adding third-party caveats
+
+TODO
 
 ## Maintenance
 

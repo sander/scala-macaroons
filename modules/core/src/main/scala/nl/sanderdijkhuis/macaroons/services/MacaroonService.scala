@@ -1,25 +1,25 @@
 package nl.sanderdijkhuis.macaroons.services
 
+import nl.sanderdijkhuis.design.domain._
+import nl.sanderdijkhuis.macaroons.cryptography._
+import nl.sanderdijkhuis.macaroons.domain._
+import nl.sanderdijkhuis.macaroons.types._
+
 import cats._
 import cats.data._
 import cats.implicits._
-import cats.tagless.{autoFunctorK, finalAlg}
+import cats.tagless._
 import eu.timepit.refined.api.RefType.refinedRefType
 import eu.timepit.refined.auto._
 import eu.timepit.refined.collection._
 import eu.timepit.refined.refineV
-import nl.sanderdijkhuis.macaroons.cryptography.util._
-import nl.sanderdijkhuis.macaroons.domain.design.Risk
-import nl.sanderdijkhuis.macaroons.domain.macaroon._
-import nl.sanderdijkhuis.macaroons.domain.verification._
-import nl.sanderdijkhuis.macaroons.types.bytes._
-import scodec.bits.ByteVector
+import scodec.bits._
 import tsec.cipher.symmetric._
-import tsec.cipher.symmetric.bouncy.{BouncySecretKey, XChaCha20Poly1305}
-import tsec.hashing.CryptoHasher
-import tsec.hashing.jca.{hashOps, SHA256}
-import tsec.mac.MessageAuth
-import tsec.mac.jca.{HMACSHA256, MacSigningKey}
+import tsec.cipher.symmetric.bouncy._
+import tsec.hashing._
+import tsec.hashing.jca._
+import tsec.mac._
+import tsec.mac.jca._
 
 import javax.crypto.spec.SecretKeySpec
 import scala.util.chaining._

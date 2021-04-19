@@ -1,13 +1,14 @@
 package nl.sanderdijkhuis.macaroons.services
 
+import nl.sanderdijkhuis.macaroons.cryptography._
+import nl.sanderdijkhuis.macaroons.domain._
+import nl.sanderdijkhuis.macaroons.repositories._
+
 import cats._
 import cats.implicits._
-import nl.sanderdijkhuis.macaroons.cryptography.util.CryptographyError
-import nl.sanderdijkhuis.macaroons.domain.macaroon._
-import nl.sanderdijkhuis.macaroons.repositories.KeyRepository
-import tsec.cipher.symmetric.Iv
-import tsec.cipher.symmetric.bouncy.XChaCha20Poly1305
-import tsec.mac.jca.{HMACSHA256, MacSigningKey}
+import tsec.cipher.symmetric._
+import tsec.cipher.symmetric.bouncy._
+import tsec.mac.jca._
 
 trait DischargeService[F[_]] {
 

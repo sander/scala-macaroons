@@ -1,5 +1,8 @@
 package nl.sanderdijkhuis.macaroons.repositories
 
+import nl.sanderdijkhuis.macaroons.domain._
+import nl.sanderdijkhuis.macaroons.effects._
+
 import cats.data._
 import cats.implicits._
 import cats.tagless._
@@ -7,8 +10,6 @@ import cats._
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import monocle.Lens
-import nl.sanderdijkhuis.macaroons.domain.macaroon.Identifier
-import nl.sanderdijkhuis.macaroons.effects.Identifiers
 
 @finalAlg @autoFunctorK
 trait KeyRepository[F[_], Identifier, Key] {

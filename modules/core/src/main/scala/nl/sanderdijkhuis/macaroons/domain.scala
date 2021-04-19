@@ -1,20 +1,21 @@
-package nl.sanderdijkhuis.macaroons.domain
+package nl.sanderdijkhuis.macaroons
 
-import cats.data.StateT
-import eu.timepit.refined.auto._
-import eu.timepit.refined.collection.NonEmpty
+import types._
+
+import cats._
+import cats.data._
+import eu.timepit.refined.collection._
 import eu.timepit.refined.refineV
-import eu.timepit.refined.types.string.NonEmptyString
+import eu.timepit.refined.auto._
+import eu.timepit.refined.types.string._
 import io.estatico.newtype.macros.newtype
-import nl.sanderdijkhuis.macaroons.repositories.KeyRepository
-import scodec.bits.ByteVector
-import nl.sanderdijkhuis.macaroons.types.bytes._
-import scodec.codecs.utf8
+import scodec.bits._
+import scodec.codecs._
 
-import scala.util.chaining._
 import scala.language.implicitConversions
+import scala.util.chaining._
 
-object macaroon {
+object domain {
 
   // TODO give better name
   trait Authority
@@ -73,6 +74,13 @@ object macaroon {
   case class Context[F[_], RootKey](
       maybeLocation: Option[Location],
       prepare: (RootKey, Predicate) => F[Identifier])
+
+  type Verifier = Predicate => Boolean
+
+  implicit object VerifierMonoid extends Monoid[Verifier] {
+    override def empty: Verifier                             = _ => false
+    override def combine(x: Verifier, y: Verifier): Verifier = c => x(c) || y(c)
+  }
 
   type Transformation[F[_], A] = StateT[F, Macaroon with Authority, A]
 }

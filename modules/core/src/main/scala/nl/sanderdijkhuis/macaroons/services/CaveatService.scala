@@ -1,11 +1,12 @@
 package nl.sanderdijkhuis.macaroons.services
 
-import cats.Monad
-import cats.data.StateT
+import nl.sanderdijkhuis.macaroons.domain._
+
+import cats._
+import cats.data._
 import cats.implicits._
-import nl.sanderdijkhuis.macaroons.domain.macaroon._
-import tsec.cipher.symmetric.Iv
-import tsec.mac.jca.MacSigningKey
+import tsec.cipher.symmetric._
+import tsec.mac.jca._
 
 trait CaveatService[F[_], Context] {
 
