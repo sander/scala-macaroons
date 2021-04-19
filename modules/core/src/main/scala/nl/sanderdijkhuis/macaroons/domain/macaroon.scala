@@ -1,5 +1,6 @@
 package nl.sanderdijkhuis.macaroons.domain
 
+import cats.data.StateT
 import eu.timepit.refined.auto._
 import eu.timepit.refined.collection.NonEmpty
 import eu.timepit.refined.refineV
@@ -60,4 +61,6 @@ object macaroon {
   case class Context[F[_], RootKey](
       maybeLocation: Option[Location],
       prepare: (RootKey, Predicate) => F[Identifier])
+
+  type Transformation[F[_], A] = StateT[F, Macaroon with Authority, A]
 }

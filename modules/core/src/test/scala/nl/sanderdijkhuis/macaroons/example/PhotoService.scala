@@ -1,12 +1,5 @@
 package nl.sanderdijkhuis.macaroons.example
 
-import cats.implicits._
-import nl.sanderdijkhuis.macaroons.effects.Identifiers
-import nl.sanderdijkhuis.macaroons.modules.{Assertions, Macaroons}
-import nl.sanderdijkhuis.macaroons.services.CaveatService.Transformation
-import tsec.cipher.symmetric.bouncy.XChaCha20Poly1305
-import tsec.mac.jca.HMACSHA256
-
 object PhotoService {
 
   // Say we run a photo service.
@@ -16,6 +9,7 @@ object PhotoService {
 
   import cats.effect._
   import nl.sanderdijkhuis.macaroons.domain.macaroon._
+  import nl.sanderdijkhuis.macaroons.effects._
 
   val generateIdentifier: IO[Identifier] = Identifiers[IO].make()
 
@@ -35,9 +29,11 @@ object PhotoService {
     .inMemoryRef[IO, Identifier, (RootKey, Predicate)](generateIdentifier)
     .unsafeRunSync()
 
-  // Now make the principal to represent our photo service:
+  // Now make the principal modules to represent our photo service:
 
   import eu.timepit.refined.auto._
+  import nl.sanderdijkhuis.macaroons.modules._
+  import tsec.mac.jca._
 
   val location: Location = Location("https://photos.example/")
 
@@ -54,6 +50,8 @@ object PhotoService {
   val m1: Macaroon with Authority = A.service.assert().unsafeRunSync()
 
   // Or macaroons with caveats:
+
+  import cats.implicits._
 
   val dateBeforeApril18: Predicate =
     Predicate(Identifier.from("date < 2021-04-18"))

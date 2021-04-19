@@ -16,8 +16,6 @@ trait CaveatService[F[_], Context] {
 
 object CaveatService {
 
-  type Transformation[F[_], A] = StateT[F, Macaroon with Authority, A]
-
   type StatefulCaveatService[F[_], HmacAlgorithm] =
     CaveatService[Transformation[F, *], Context[F, MacSigningKey[
       HmacAlgorithm]]]
