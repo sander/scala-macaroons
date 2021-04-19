@@ -36,9 +36,14 @@ object macaroon {
         refineV[NonEmpty].unsafeFrom(utf8.encode(i.toString).require.bytes))
   }
 
-  // TODO apply more
   @newtype
   case class Predicate(identifier: Identifier)
+
+  object Predicate {
+
+    def from(string: NonEmptyString): Predicate =
+      Predicate(Identifier.from(string))
+  }
 
   @newtype
   case class Challenge(value: NonEmptyByteVector)

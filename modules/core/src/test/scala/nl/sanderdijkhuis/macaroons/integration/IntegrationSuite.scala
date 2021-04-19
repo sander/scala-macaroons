@@ -72,14 +72,14 @@ class IntegrationSuite extends FunSuite {
     private val authenticationServiceLocation =
       Location("https://authentication.example/")
 
-    val chunkInRange    = Predicate(Identifier.from("chunk in {100...500}"))
-    val opInReadWrite   = Predicate(Identifier.from("op in {read, write}"))
-    val timeBefore3pm   = Predicate(Identifier.from("time < 5/1/13 3pm"))
-    val userIsBob       = Predicate(Identifier.from("user = bob"))
-    val chunkIs235      = Predicate(Identifier.from("chunk = 235"))
-    val operationIsRead = Predicate(Identifier.from("operation = read"))
-    val timeBefore9am   = Predicate(Identifier.from("time < 5/1/13 9am"))
-    val ipMatch         = Predicate(Identifier.from("ip = 192.0.32.7"))
+    val chunkInRange    = Predicate.from("chunk in {100...500}")
+    val opInReadWrite   = Predicate.from("op in {read, write}")
+    val timeBefore3pm   = Predicate.from("time < 5/1/13 3pm")
+    val userIsBob       = Predicate.from("user = bob")
+    val chunkIs235      = Predicate.from("chunk = 235")
+    val operationIsRead = Predicate.from("operation = read")
+    val timeBefore9am   = Predicate.from("time < 5/1/13 9am")
+    val ipMatch         = Predicate.from("ip = 192.0.32.7")
 
     val tsVerifier = Set(
       chunkInRange,

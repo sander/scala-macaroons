@@ -20,7 +20,7 @@ object PhotoService {
   import nl.sanderdijkhuis.macaroons.services.MacaroonService.RootKey
 
   val rootKeyRepository: KeyRepository[IO, Identifier, RootKey] = KeyRepository
-    .inMemoryRef[IO, Identifier, RootKey](generateIdentifier).unsafeRunSync()
+    .inMemoryRef[IO, RootKey].unsafeRunSync()
 
   // The same for discharge keys, to generate discharges for third-party
   // caveats:
@@ -47,9 +47,8 @@ object PhotoService {
 
   import cats.implicits._
 
-  val dateBeforeApril18: Predicate =
-    Predicate(Identifier.from("date < 2021-04-18"))
-  val userIsWilleke: Predicate = Predicate(Identifier.from("user = willeke"))
+  val dateBeforeApril18: Predicate = Predicate.from("date < 2021-04-18")
+  val userIsWilleke: Predicate     = Predicate.from("user = willeke")
 
   val attenuation: Transformation[IO, Unit] = M.caveats
     .attenuate(dateBeforeApril18) *> M.caveats.attenuate(userIsWilleke)

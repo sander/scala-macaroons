@@ -7,6 +7,8 @@ import cats._
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import monocle.Lens
+import nl.sanderdijkhuis.macaroons.domain.macaroon.Identifier
+import nl.sanderdijkhuis.macaroons.effects.Identifiers
 
 @finalAlg @autoFunctorK
 trait KeyRepository[F[_], Identifier, Key] {
@@ -64,4 +66,8 @@ object KeyRepository {
       generateId: F[I]): F[KeyRepository[F, I, K]] =
     Ref.of[F, Map[I, K]](Map.empty)
       .map(r => new InMemoryRef[F, I, K](r, generateId))
+
+  def inMemoryRef[F[_]: Sync: Identifiers, K]
+      : F[KeyRepository[F, Identifier, K]] =
+    inMemoryRef[F, Identifier, K](Identifiers[F].make())
 }
