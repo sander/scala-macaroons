@@ -30,18 +30,20 @@ class IntegrationSuite extends FunSuite {
   type F[A] = Either[E, A]
 
   test("example from paper") {
-    val C = macaroons.caveats
+    import macaroons.caveats._
     val program: StateT[F, TestState, Boolean] = for {
-      m_ts <- ts.assert()
-      m_ts <-
-      (C.attenuate(chunkInRange) *> C.attenuate(opInReadWrite) *>
-        C.attenuate(timeBefore3pm)).runS(m_ts)
-      (m_fs, cid) <-
-      (C.confine(asEndpoint, userIsBob) <* C.attenuate(chunkIs235) <*
-        C.attenuate(operationIsRead)).run(m_ts)
-      _           <- as.getPredicate(cid).flatMapF(handleError("no predicate"))
-      m_as        <- as.discharge(cid).flatMapF(handleError("no discharge"))
-      m_as        <- (C.attenuate(timeBefore9am) *> C.attenuate(ipMatch)).runS(m_as)
+      m_ts <- ts.assert() >>= {
+        attenuate(chunkInRange) *> attenuate(opInReadWrite) *>
+          attenuate(timeBefore3pm)
+      }.runS
+      (m_fs, cid) <- {
+        confine(asEndpoint, userIsBob) <* attenuate(chunkIs235) <*
+          attenuate(operationIsRead)
+      }.run(m_ts)
+      _ <- as.getPredicate(cid).flatMapF(handleError("no predicate"))
+      m_as <- as.discharge(cid).flatMapF(handleError("no discharge")) >>= {
+        attenuate(timeBefore9am) *> attenuate(ipMatch)
+      }.runS
       m_as_sealed <- macaroons.binding.bind(m_fs, m_as)
       result      <- ts.verify(m_fs, tsVerifier, Set(m_as_sealed))
     } yield result
