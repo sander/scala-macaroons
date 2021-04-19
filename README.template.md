@@ -23,55 +23,57 @@ dependsOn(
 
 Say we run a photo service.
 
+Import language dependencies:
+
+```scala mdoc
+import cats.effect._
+import cats.implicits._
+import eu.timepit.refined.auto._
+```
+
+Import macaroons dependencies:
+
+```scala mdoc
+import nl.sanderdijkhuis.macaroons.codecs.macaroon._
+import nl.sanderdijkhuis.macaroons.effects._
+import nl.sanderdijkhuis.macaroons.domain.macaroon._
+import nl.sanderdijkhuis.macaroons.modules._
+import nl.sanderdijkhuis.macaroons.repositories._
+```
+
 Specify a strategy to generate macaroon and caveat identifiers unique at this photo service:
 
 ```scala mdoc:silent
-import cats.effect._
-import nl.sanderdijkhuis.macaroons.domain.macaroon._
-import nl.sanderdijkhuis.macaroons.effects._
-
 val identifiers: Identifiers[IO] = Identifiers.secureRandom
 ```
 
 Then specify a strategy to store root keys, to generate and verify macaroons:
 
 ```scala mdoc:silent
-import nl.sanderdijkhuis.macaroons.repositories._
-import tsec.mac.jca._
-
-val rootKeyRepository
-    : KeyRepository[IO, Identifier, MacSigningKey[HMACSHA256]] = KeyRepository
-  .inMemoryRef[IO, MacSigningKey[HMACSHA256]].unsafeRunSync()
+val rootKeys: RootKeys[IO] = RootKeys.makeInMemory().unsafeRunSync()
 ```
 
-Now make the principal modules to represent our photo service:
+Now make the principal module to represent our photo service:
 
 ```scala mdoc:silent
-import eu.timepit.refined.auto._
-import nl.sanderdijkhuis.macaroons.modules._
-import tsec.mac.jca._
-
-val location: Location = Location("https://photos.example/")
-val M: Macaroons[IO]   = Macaroons.make()
-val A: Assertions[IO]  = Assertions.make(Some(location), M, rootKeyRepository)
+val assertions: Assertions[IO] = Assertions.make(rootKeys.repository)
 ```
 
 With this principal we can create new macaroons:
 
 ```scala mdoc
-val m1: Macaroon with Authority = A.service.assert().unsafeRunSync()
+val m1: Macaroon with Authority = assertions.service.assert().unsafeRunSync()
 ```
 
 Or define some caveats:
 
 ```scala mdoc:silent
-import cats.implicits._
-
 val dateBeforeApril18: Predicate = Predicate.from("date < 2021-04-18")
 val userIsWilleke: Predicate     = Predicate.from("user = willeke")
 
-val attenuation: Transformation[IO, Unit] = M.caveats
-  .attenuate(dateBeforeApril18) *> M.caveats.attenuate(userIsWilleke)
+val M: Macaroons[IO] = assertions.macaroons
+val attenuation: Transformation[IO, Unit] =
+  M.caveats.attenuate(dateBeforeApril18) *> M.caveats.attenuate(userIsWilleke)
 ```
 
 And bake a macaroon with these:
@@ -83,9 +85,7 @@ val m2: Macaroon with Authority = attenuation.runS(m1).unsafeRunSync()
 Use the codec to transfer it to the client:
 
 ```scala mdoc
-import nl.sanderdijkhuis.macaroons.codecs.macaroon._
-
-println(macaroonV2.encode(m2).require.toBase64)
+macaroonV2.encode(m2).require.toBase64
 ```
 
 ## Maintenance

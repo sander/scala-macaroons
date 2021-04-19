@@ -151,10 +151,10 @@ class IntegrationSuite extends FunSuite {
         : Assertions[StateT[F, TestState, *]] = {
       type G[A] = StateT[F, TestState, A]
       Assertions.make[G, E](
-        maybeLocation,
         macaroons,
         rootKeyRepository(id),
-        StateT.liftF(unsafeGenerateKey))
+        StateT.liftF(unsafeGenerateKey),
+        maybeLocation)
     }
 
     val ts =
