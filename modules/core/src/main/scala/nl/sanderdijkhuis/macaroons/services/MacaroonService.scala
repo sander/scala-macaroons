@@ -213,14 +213,4 @@ object MacaroonService {
       HmacAlgorithm,
       AuthCipher,
       AuthCipherSecretKey](buildMacKey, buildSecretKey, nonceSize)
-
-//  def apply[F[_], E >: CryptographyError](implicit F: MonadError[F, E])
-//      : MacaroonService[F, RootKey, InitializationVector] = {
-//    implicit val e: Encryptor[F, XChaCha20Poly1305, BouncySecretKey] =
-//      encryptor[F, E]
-//    new TsecLive[F, SHA256, HMACSHA256, XChaCha20Poly1305, BouncySecretKey](
-//      buildMacKey[F, E],
-//      buildEncryptionKey[F, E],
-//      XChaCha20Poly1305.nonceSize)
-//  }
 }

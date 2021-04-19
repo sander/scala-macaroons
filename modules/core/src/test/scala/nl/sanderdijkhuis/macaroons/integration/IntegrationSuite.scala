@@ -42,7 +42,7 @@ class IntegrationSuite extends FunSuite {
       _           <- as.getPredicate(cid).flatMapF(handleError("no predicate"))
       m_as        <- as.discharge(cid).flatMapF(handleError("no discharge"))
       m_as        <- (C.attenuate(timeBefore9am) *> C.attenuate(ipMatch)).runS(m_as)
-      m_as_sealed <- macaroons.service.bind(m_fs, m_as)
+      m_as_sealed <- macaroons.binding.bind(m_fs, m_as)
       result      <- ts.verify(m_fs, tsVerifier, Set(m_as_sealed))
     } yield result
     assert(program.runA(TestState()).contains(true))

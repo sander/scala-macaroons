@@ -3,7 +3,9 @@ package nl.sanderdijkhuis.macaroons.modules
 import cats.effect.{IO, Sync}
 import cats.{Id, MonadError}
 import nl.sanderdijkhuis.macaroons.cryptography.util._
-import nl.sanderdijkhuis.macaroons.services.{CaveatService, MacaroonService}
+import nl.sanderdijkhuis.macaroons.services.{
+  BindingService, CaveatService, MacaroonService
+}
 import tsec.cipher.symmetric.bouncy.{BouncySecretKey, XChaCha20Poly1305}
 import tsec.cipher.symmetric.{Encryptor, Iv}
 import tsec.hashing.CryptoHasher
@@ -28,7 +30,8 @@ object Macaroons {
       XChaCha20Poly1305.nonceSize)
     Macaroons[F](
       macaroonService,
-      CaveatService.make(macaroonService, S.generateKey, generateIv))
+      CaveatService.make(macaroonService, S.generateKey, generateIv),
+      BindingService.make(macaroonService))
   }
 
   def defaultIvGenerator[F[_]: Sync]: F[Iv[XChaCha20Poly1305]] =
@@ -39,8 +42,9 @@ object Macaroons {
 }
 
 final case class Macaroons[F[_]] private (
-    service: MacaroonService[
+    private[modules] val service: MacaroonService[
       F,
       Macaroons.RootKey,
       Macaroons.InitializationVector],
-    caveats: CaveatService.StatefulCaveatService[F, HMACSHA256])
+    caveats: CaveatService.StatefulCaveatService[F, HMACSHA256],
+    binding: BindingService[F])
