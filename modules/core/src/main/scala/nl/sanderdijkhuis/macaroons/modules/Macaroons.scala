@@ -37,6 +37,13 @@ object Macaroons {
   def defaultIvGenerator[F[_]: Sync]: F[Iv[XChaCha20Poly1305]] =
     XChaCha20Poly1305.defaultIvGen[F].genIv
 
+  def make[F[_]: Sync]()(implicit
+      S: SymmetricKeyGen[F, HMACSHA256, MacSigningKey],
+      mac: MessageAuth[F, HMACSHA256, MacSigningKey],
+      hasher: CryptoHasher[Id, SHA256],
+      encryptor: Encryptor[F, XChaCha20Poly1305, BouncySecretKey])
+      : Macaroons[F] = make[F, Throwable](defaultIvGenerator)
+
   type RootKey              = MacSigningKey[HMACSHA256]
   type InitializationVector = Iv[XChaCha20Poly1305]
 }

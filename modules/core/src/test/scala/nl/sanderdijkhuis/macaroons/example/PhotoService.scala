@@ -36,14 +36,8 @@ object PhotoService {
   import tsec.mac.jca._
 
   val location: Location = Location("https://photos.example/")
-
-  val M: Macaroons[IO] = Macaroons
-    .make[IO, Throwable](Macaroons.defaultIvGenerator[IO])
-
-  val A: Assertions[IO] = Assertions.make[IO, Throwable](Some(location))(
-    M,
-    rootKeyRepository,
-    HMACSHA256.generateKey[IO])
+  val M: Macaroons[IO]   = Macaroons.make()
+  val A: Assertions[IO]  = Assertions.make(Some(location), M, rootKeyRepository)
 
   // With this principal we can create new macaroons:
 

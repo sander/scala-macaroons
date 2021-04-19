@@ -1,6 +1,7 @@
 package nl.sanderdijkhuis.macaroons.modules
 
 import cats.MonadError
+import cats.effect.Sync
 import nl.sanderdijkhuis.macaroons.cryptography.util.CryptographyError
 import nl.sanderdijkhuis.macaroons.domain.macaroon.{Identifier, Location}
 import nl.sanderdijkhuis.macaroons.repositories.KeyRepository
@@ -10,7 +11,8 @@ import tsec.mac.jca.{HMACSHA256, MacSigningKey}
 
 object Assertions {
 
-  def make[F[_], E >: CryptographyError](maybeLocation: Option[Location])(
+  def make[F[_], E >: CryptographyError](
+      maybeLocation: Option[Location],
       macaroons: Macaroons[F],
       rootKeyRepository: KeyRepository[F, Identifier, MacSigningKey[
         HMACSHA256]],
@@ -20,6 +22,19 @@ object Assertions {
       maybeLocation)(macaroons.service, rootKeyRepository, generateKey)
     Assertions(macaroons, service)
   }
+
+  def make[F[_]: Sync](
+      maybeLocation: Option[Location],
+      macaroons: Macaroons[F],
+      rootKeyRepository: KeyRepository[
+        F,
+        Identifier,
+        MacSigningKey[HMACSHA256]]): Assertions[F] =
+    make[F, Throwable](
+      maybeLocation,
+      macaroons,
+      rootKeyRepository,
+      HMACSHA256.generateKey[F])
 }
 
 final case class Assertions[F[_]] private (

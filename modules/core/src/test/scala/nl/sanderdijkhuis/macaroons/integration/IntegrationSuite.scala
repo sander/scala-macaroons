@@ -150,7 +150,8 @@ class IntegrationSuite extends FunSuite {
         maybeLocation: Option[Location])
         : Assertions[StateT[F, TestState, *]] = {
       type G[A] = StateT[F, TestState, A]
-      Assertions.make[G, E](maybeLocation)(
+      Assertions.make[G, E](
+        maybeLocation,
         macaroons,
         rootKeyRepository(id),
         StateT.liftF(unsafeGenerateKey))
