@@ -6,6 +6,7 @@ import eu.timepit.refined.collection.NonEmpty
 import eu.timepit.refined.refineV
 import eu.timepit.refined.types.string.NonEmptyString
 import io.estatico.newtype.macros.newtype
+import nl.sanderdijkhuis.macaroons.repositories.KeyRepository
 import scodec.bits.ByteVector
 import nl.sanderdijkhuis.macaroons.types.bytes._
 import scodec.codecs.utf8

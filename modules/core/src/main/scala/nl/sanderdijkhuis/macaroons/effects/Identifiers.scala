@@ -29,6 +29,6 @@ object Identifiers {
       }
   }
 
-  implicit def syncIdentifiers[F[_]: Sync]: Identifiers[F] =
+  implicit def secureRandom[F[_]: Sync]: Identifiers[F] =
     () => Generator.generate[F]
 }
