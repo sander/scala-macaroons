@@ -29,10 +29,10 @@ import scala.util.chaining._
 trait MacaroonService[F[_], RootKey, InitializationVector] {
 
   @Risk("Not enforcing properties of RootKey allows for generating weak keys.")
-  def generate(
+  def mint(
       identifier: Identifier,
       rootKey: RootKey,
-      maybeLocation: Option[Location]): F[Macaroon with Authority]
+      maybeLocation: Option[Location] = None): F[Macaroon with Authority]
 
   def bind(
       authorizing: Macaroon with Authority,
@@ -42,8 +42,7 @@ trait MacaroonService[F[_], RootKey, InitializationVector] {
       macaroon: Macaroon with Authority,
       identifier: Identifier): F[Macaroon with Authority]
 
-  @Risk(
-    "By letting the user specify the IV, we enable accidental re-use. Use hash(key) instead?")
+  @Risk("By letting the user specify the IV, we enable accidental re-use.")
   def addThirdPartyCaveat(
       macaroon: Macaroon with Authority,
       key: RootKey,
@@ -118,7 +117,7 @@ object MacaroonService {
         .map(_.asInstanceOf[Macaroon with Authority])
     }
 
-    def generate(
+    def mint(
         identifier: Identifier,
         rootKey: MacSigningKey[HmacAlgorithm],
         maybeLocation: Option[Location]): F[Macaroon with Authority] =

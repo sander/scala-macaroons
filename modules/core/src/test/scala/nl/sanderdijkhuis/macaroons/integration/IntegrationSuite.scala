@@ -7,15 +7,10 @@ import cats.tagless.Derive
 import cats.{~>, Applicative}
 import eu.timepit.refined.api.RefType.refinedRefType
 import eu.timepit.refined.auto._
-import eu.timepit.refined.predicates.all.NonEmpty
-import eu.timepit.refined.refineV
-import monocle.Lens
-import monocle.macros.GenLens
 import munit.FunSuite
 import nl.sanderdijkhuis.macaroons.cryptography._
 import nl.sanderdijkhuis.macaroons.domain._
-import nl.sanderdijkhuis.macaroons.modules.{Assertions, Discharges, Macaroons}
-import nl.sanderdijkhuis.macaroons.repositories.KeyRepository
+import nl.sanderdijkhuis.macaroons.modules.Macaroons
 import nl.sanderdijkhuis.macaroons.services.MacaroonService.RootKey
 import tsec.cipher.symmetric.Encryptor
 import tsec.cipher.symmetric.bouncy.{BouncySecretKey, XChaCha20Poly1305}
@@ -31,21 +26,20 @@ class IntegrationSuite extends FunSuite {
 
   test("example from paper") {
     import macaroons.caveats._
+    import macaroons.service._
+    val txAtTs = attenuate(chunkInRange) *> attenuate(opInReadWrite) *>
+      attenuate(timeBefore3pm)
+    val txAtFs = confine(asEndpoint, userIsBob) <* attenuate(chunkIs235) <*
+      attenuate(operationIsRead)
+    val txAtAs = attenuate(timeBefore9am) *> attenuate(ipMatch)
     val program: StateT[F, TestState, Boolean] = for {
-      mTS <- ts.assert() >>= {
-        attenuate(chunkInRange) *> attenuate(opInReadWrite) *>
-          attenuate(timeBefore3pm)
-      }.runS
-      (mFS, cid) <- {
-        confine(asEndpoint, userIsBob) <* attenuate(chunkIs235) <*
-          attenuate(operationIsRead)
-      }.run(mTS)
-      _ <- as.getPredicate(cid).flatMapF(handleError("no predicate"))
-      mAS <- as.discharge(cid).flatMapF(handleError("no discharge")) >>= {
-        attenuate(timeBefore9am) *> attenuate(ipMatch)
-      }.runS
-      mASs   <- macaroons.binding.bind(mFS, mAS)
-      result <- ts.verify(mFS, tsVerifier, Set(mASs))
+      mk         <- key
+      mTS        <- mint(mId, mk, Some(targetServiceLocation)) >>= txAtTs.runS
+      (mFS, cid) <- txAtFs.run(mTS)
+      dk         <- dischargeKey
+      mAS        <- mint(cid, dk, asEndpoint.maybeLocation) >>= txAtAs.runS
+      mASs       <- bind(mFS, mAS)
+      result     <- verify(mFS, mk, tsVerifier, Set(mASs))
     } yield result
     assert(program.runA(TestState()).contains(true))
   }
@@ -53,26 +47,16 @@ class IntegrationSuite extends FunSuite {
   //noinspection TypeAnnotation
   private object TestData {
 
-    def handleError[A](s: String)(a: Option[A]): Either[E, A] =
-      a.toRight(new Throwable(s))
+    def dischargeKey =
+      StateT.inspectF((s: TestState) =>
+        s.dischargeKey.toRight(new Throwable("not found")))
 
-    private val generateIdInState: State[TestState, Identifier] = {
-      val generate = State((i: Int) => (i + 1, i))
-      val lens     = GenLens[TestState](_.nextInt)
-      val generateInState = State { (t: TestState) =>
-        val (state, i) = generate.run(lens.get(t)).value
-        (lens.replace(state)(t), i)
-      }
-      def identifier(i: Int) =
-        Identifier.from(refineV[NonEmpty].unsafeFrom(i.toString))
-      generateInState.map(identifier)
-    }
-
-    private val targetServiceLocation = Location("https://target.example/")
-    private val forumServiceLocation  = Location("https://forum.example/")
+    val targetServiceLocation = Location("https://target.example/")
 
     private val authenticationServiceLocation =
       Location("https://authentication.example/")
+
+    val mId = Identifier.from("m1")
 
     val chunkInRange    = Predicate.from("chunk in {100...500}")
     val opInReadWrite   = Predicate.from("op in {read, write}")
@@ -92,34 +76,17 @@ class IntegrationSuite extends FunSuite {
       timeBefore9am,
       ipMatch)
 
-    case class TestState(
-        ts: PrincipalState = PrincipalState(),
-        fs: PrincipalState = PrincipalState(),
-        as: PrincipalState = PrincipalState(),
-        nextInt: Int = 0)
+    case class TestState(dischargeKey: Option[RootKey] = None)
 
     val asEndpoint = Context[StateT[F, TestState, *], RootKey](
       Some(authenticationServiceLocation),
-      (v, w) => dischargeKeyRepository(GenLens[TestState](_.as)).protect(v, w))
+      (v, w) =>
+        StateT((s: TestState) =>
+          (s.copy(dischargeKey = Some(v)), Identifier.from("dm")).asRight))
 
-    case class PrincipalState(
-        rootKeys: Map[Identifier, RootKey] = Map.empty,
-        dischargeKeys: Map[Identifier, (RootKey, Predicate)] = Map.empty)
-
-    private type PrincipalId = Lens[TestState, PrincipalState]
-
-    private def rootKeyRepository(id: PrincipalId) =
-      KeyRepository.inMemoryF[F, TestState, Identifier, RootKey](
-        id.andThen(GenLens[PrincipalState](_.rootKeys)),
-        generateIdInState)
-
-    private def dischargeKeyRepository(id: PrincipalId) =
-      KeyRepository.inMemoryF[F, TestState, Identifier, (RootKey, Predicate)](
-        id.andThen(GenLens[PrincipalState](_.dischargeKeys)),
-        generateIdInState)
-
-    private def unsafeGenerateKey =
-      HMACSHA256.generateKey[IO].attempt.unsafeRunSync()
+    def key =
+      StateT.liftF[F, TestState, MacSigningKey[HMACSHA256]](
+        HMACSHA256.generateKey[IO].attempt.unsafeRunSync())
 
     private def unsafeGenerateIv =
       XChaCha20Poly1305.defaultIvGen[IO].genIv.attempt.unsafeRunSync()
@@ -137,38 +104,5 @@ class IntegrationSuite extends FunSuite {
         .mapK[F, G](encryptor[F, E])(functorK)
       Macaroons.make[G, E](StateT.liftF(unsafeGenerateIv))
     }
-
-    private def unsafeDischarges(
-        id: PrincipalId,
-        maybeLocation: Option[Location])
-        : Discharges[StateT[F, TestState, *]] = {
-      type G[A] = StateT[F, TestState, A]
-      Discharges
-        .make[G, E](maybeLocation)(macaroons, dischargeKeyRepository(id))
-    }
-
-    private def unsafeAssertions(
-        id: PrincipalId,
-        maybeLocation: Option[Location])
-        : Assertions[StateT[F, TestState, *]] = {
-      type G[A] = StateT[F, TestState, A]
-      Assertions.make[G, E](
-        macaroons,
-        rootKeyRepository(id),
-        StateT.liftF(unsafeGenerateKey),
-        maybeLocation)
-    }
-
-    val ts =
-      unsafeAssertions(GenLens[TestState](_.ts), targetServiceLocation.some)
-        .service
-
-    val fs =
-      unsafeDischarges(GenLens[TestState](_.fs), forumServiceLocation.some)
-        .service
-
-    val as = unsafeDischarges(
-      GenLens[TestState](_.as),
-      authenticationServiceLocation.some).service
   }
 }

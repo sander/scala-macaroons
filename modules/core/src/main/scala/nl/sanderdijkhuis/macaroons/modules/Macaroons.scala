@@ -29,8 +29,7 @@ object Macaroons {
       XChaCha20Poly1305.nonceSize)
     Macaroons[F](
       macaroonService,
-      CaveatService.make(macaroonService, S.generateKey, generateIv),
-      BindingService.make(macaroonService))
+      CaveatService.make(macaroonService, S.generateKey, generateIv))
   }
 
   def defaultIvGenerator[F[_]: Sync]: F[Iv[XChaCha20Poly1305]] =
@@ -48,9 +47,8 @@ object Macaroons {
 }
 
 final case class Macaroons[F[_]] private (
-    private[modules] val service: MacaroonService[
+    service: MacaroonService[
       F,
       Macaroons.RootKey,
       Macaroons.InitializationVector],
-    caveats: CaveatService.StatefulCaveatService[F, HMACSHA256],
-    binding: BindingService[F])
+    caveats: CaveatService.StatefulCaveatService[F, HMACSHA256])
