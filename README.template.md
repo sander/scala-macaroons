@@ -2,7 +2,7 @@
 
 This library implements [Macaroons: Cookies with Contextual Caveats for Decentralized Authorization in the Cloud](https://research.google/pubs/pub41892/), which are [inexplicably underused](https://latacora.micro.blog/a-childs-garden/), for [Scala](https://www.scala-lang.org/).
 
-It uses the [libmacaroons binary format](https://github.com/rescrv/libmacaroons/blob/master/doc/format.txt) with HMAC-SHA256 for authenticating macaroons, SHA256 for binding them, and XChaCha20-Poly1305 for encrypting verification keys.
+It uses the [libmacaroons version 2 binary format](https://github.com/rescrv/libmacaroons/blob/master/doc/format.txt) with HMAC-SHA256 for authenticating macaroons, SHA256 for binding them, and XChaCha20-Poly1305 for encrypting verification keys.
 
 > **Note**: Not ready for production use yet.
 
@@ -95,13 +95,19 @@ val predicatesForThisRequest =
   Set(dateBeforeApril18, userIsWilleke, someOtherPredicate)
 ```
 
-Note that although we are using a set, we can use any function `Predicate => Boolean`. To verify, again:
+Note that although this particular example uses a set, we could have used any function `Predicate => Boolean`. One particularly useful type of function matches the prefix of the predicate (e.g. `date < `), parses the rest of the predicate and verifies this with data from the request context. 
+
+To verify the macaroon, again:
 
 ```scala mdoc
 assertions.service.verify(macaroon2, predicatesForThisRequest).unsafeRunSync()
 ```
 
 ### Adding third-party caveats
+
+Although we could have a verifier function query some external service as a side effect, macaroons offer a better way. On our photo service, we could confine a macaroon to be used only within a certain context, asserted by for example an authentication service. The confinement is again expressed as a caveat, containing a challenge to be resolved at the authentication service. This is proven using a *discharge macaroon* issued by the authentication service, which could in itself contain caveats.
+
+To demonstrate this, first we will create a stub authentication service:
 
 TODO
 

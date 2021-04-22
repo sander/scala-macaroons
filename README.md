@@ -2,7 +2,7 @@
 
 This library implements [Macaroons: Cookies with Contextual Caveats for Decentralized Authorization in the Cloud](https://research.google/pubs/pub41892/), which are [inexplicably underused](https://latacora.micro.blog/a-childs-garden/), for [Scala](https://www.scala-lang.org/).
 
-It uses the [libmacaroons binary format](https://github.com/rescrv/libmacaroons/blob/master/doc/format.txt) with HMAC-SHA256 for authenticating macaroons, SHA256 for binding them, and XChaCha20-Poly1305 for encrypting verification keys.
+It uses the [libmacaroons version 2 binary format](https://github.com/rescrv/libmacaroons/blob/master/doc/format.txt) with HMAC-SHA256 for authenticating macaroons, SHA256 for binding them, and XChaCha20-Poly1305 for encrypting verification keys.
 
 > **Note**: Not ready for production use yet.
 
@@ -55,9 +55,9 @@ Now we can mint a new macaroon:
 val macaroon = assertions.service.assert().unsafeRunSync()
 // macaroon: Macaroon with Authority = Macaroon(
 //   maybeLocation = None,
-//   id = ByteVector(16 bytes, 0xaf2e6c59ea2e282e5ad29dda68b9fc5f),
+//   id = ByteVector(16 bytes, 0x0b9ddf03534a05975a6520aab2523ac2),
 //   caveats = Vector(),
-//   tag = ByteVector(32 bytes, 0x5427883e0667957e67b32979c0e75d0009e20ae4cf47d596af98731b1ac43699)
+//   tag = ByteVector(32 bytes, 0x2906520c8a6c9210af345b2a8081a0a7e641bf4fb37747ddee26475dabfee136)
 // )
 ```
 
@@ -65,7 +65,7 @@ We can serialize it to transfer it to the client:
 
 ```scala
 macaroonV2.encode(macaroon).require.toBase64
-// res0: String = "AgIQry5sWeouKC5a0p3aaLn8XwAABiBUJ4g+BmeVfmezKXnA510ACeIK5M9H1ZavmHMbGsQ2mQ=="
+// res0: String = "AgIQC53fA1NKBZdaZSCqslI6wgAABiApBlIMimySEK80WyqAgaCn5kG/T7N3R93uJkddq/7hNg=="
 ```
 
 Now, when the client would get back to us with this macaroon, we could verify it:
@@ -95,7 +95,7 @@ And bake a macaroon with this transformation:
 val macaroon2 = transformation.runS(macaroon).unsafeRunSync()
 // macaroon2: Macaroon with Authority = Macaroon(
 //   maybeLocation = None,
-//   id = ByteVector(16 bytes, 0xaf2e6c59ea2e282e5ad29dda68b9fc5f),
+//   id = ByteVector(16 bytes, 0x0b9ddf03534a05975a6520aab2523ac2),
 //   caveats = Vector(
 //     Caveat(
 //       maybeLocation = None,
@@ -108,7 +108,7 @@ val macaroon2 = transformation.runS(macaroon).unsafeRunSync()
 //       maybeChallenge = None
 //     )
 //   ),
-//   tag = ByteVector(32 bytes, 0xd091a398a4c2c840fb39fb88b28f899f6c88efbfa6f450c766ecf5b748bf5e34)
+//   tag = ByteVector(32 bytes, 0x33278239bb69e62f08d6c42dd6b4115801f186d48178c10c850fcaebf2e5a07f)
 // )
 ```
 
@@ -120,7 +120,9 @@ val predicatesForThisRequest =
   Set(dateBeforeApril18, userIsWilleke, someOtherPredicate)
 ```
 
-Note that although we are using a set, we can use any function `Predicate => Boolean`. To verify, again:
+Note that although this particular example uses a set, we could have used any function `Predicate => Boolean`. One particularly useful type of function matches the prefix of the predicate (e.g. `date < `), parses the rest of the predicate and verifies this with data from the request context. 
+
+To verify the macaroon, again:
 
 ```scala
 assertions.service.verify(macaroon2, predicatesForThisRequest).unsafeRunSync()
@@ -128,6 +130,10 @@ assertions.service.verify(macaroon2, predicatesForThisRequest).unsafeRunSync()
 ```
 
 ### Adding third-party caveats
+
+Although we could have a verifier function query some external service as a side effect, macaroons offer a better way. On our photo service, we could confine a macaroon to be used only within a certain context, asserted by for example an authentication service. The confinement is again expressed as a caveat, containing a challenge to be resolved at the authentication service. This is proven using a *discharge macaroon* issued by the authentication service, which could in itself contain caveats.
+
+To demonstrate this, first we will create a stub authentication service:
 
 TODO
 
