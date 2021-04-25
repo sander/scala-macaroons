@@ -17,9 +17,6 @@ import scala.util.chaining._
 
 object domain {
 
-  // TODO give better name
-  trait Authority
-
   // TODO could have more precise type
   @newtype
   case class AuthenticationTag(value: NonEmptyByteVector)
@@ -82,5 +79,5 @@ object domain {
     override def combine(x: Verifier, y: Verifier): Verifier = c => x(c) || y(c)
   }
 
-  type Transformation[F[_], A] = StateT[F, Macaroon with Authority, A]
+  type Transformation[F[_], A] = StateT[F, Macaroon, A]
 }

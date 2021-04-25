@@ -32,24 +32,22 @@ trait MacaroonService[F[_], RootKey] {
   def mint(
       identifier: Identifier,
       rootKey: RootKey,
-      maybeLocation: Option[Location] = None): F[Macaroon with Authority]
+      maybeLocation: Option[Location] = None): F[Macaroon]
 
-  def bind(
-      authorizing: Macaroon with Authority,
-      discharging: Macaroon): F[Macaroon]
+  def bind(authorizing: Macaroon, discharging: Macaroon): F[Macaroon]
 
   def addFirstPartyCaveat(
-      macaroon: Macaroon with Authority,
-      identifier: Identifier): F[Macaroon with Authority]
+      macaroon: Macaroon,
+      identifier: Identifier): F[Macaroon]
 
   def addThirdPartyCaveat(
-      macaroon: Macaroon with Authority,
+      macaroon: Macaroon,
       key: RootKey,
       identifier: Identifier,
-      maybeLocation: Option[Location]): F[Macaroon with Authority]
+      maybeLocation: Option[Location]): F[Macaroon]
 
   def verify(
-      macaroon: Macaroon with Authority,
+      macaroon: Macaroon,
       key: RootKey,
       verifier: Verifier,
       Ms: Set[Macaroon]): F[Boolean]
@@ -74,16 +72,14 @@ object MacaroonService {
       refineV[NonEmpty].unsafeFrom(byteVector)
 
     private def bind(
-        authorizing: Macaroon with Authority,
+        authorizing: Macaroon,
         dischargingTag: AuthenticationTag): F[AuthenticationTag] =
       (dischargingTag.value ++ authorizing.tag.value).toArray
         .hash[HashAlgorithm]
         .pipe(v => AuthenticationTag(unsafeNonEmptyByteVector(ByteVector(v))))
         .pure[F]
 
-    def bind(
-        authorizing: Macaroon with Authority,
-        discharging: Macaroon): F[Macaroon] =
+    def bind(authorizing: Macaroon, discharging: Macaroon): F[Macaroon] =
       bind(authorizing, discharging.tag).map(t => discharging.copy(tag = t))
 
     private def toKey(byteVector: ByteVector): MacSigningKey[HmacAlgorithm] =
@@ -105,35 +101,33 @@ object MacaroonService {
     }
 
     private def addCaveatHelper(
-        macaroon: Macaroon with Authority,
+        macaroon: Macaroon,
         identifier: Identifier,
         maybeVerificationKeyId: Option[Challenge],
-        maybeLocation: Option[Location]): F[Macaroon with Authority] = {
+        maybeLocation: Option[Location]): F[Macaroon] = {
       val caveats = macaroon.caveats :+
         Caveat(maybeLocation, identifier, maybeVerificationKeyId)
       authenticateCaveat(macaroon.tag, maybeVerificationKeyId, identifier)
         .map(tag => macaroon.copy(caveats = caveats, tag = tag))
-        .map(_.asInstanceOf[Macaroon with Authority])
     }
 
     def mint(
         identifier: Identifier,
         rootKey: MacSigningKey[HmacAlgorithm],
-        maybeLocation: Option[Location]): F[Macaroon with Authority] =
-      authenticate(identifier.value, rootKey).map(tag =>
-        Macaroon(maybeLocation, identifier, Vector.empty, tag)
-          .asInstanceOf[Macaroon with Authority])
+        maybeLocation: Option[Location]): F[Macaroon] =
+      authenticate(identifier.value, rootKey)
+        .map(Macaroon(maybeLocation, identifier, Vector.empty, _))
 
     def addFirstPartyCaveat(
-        macaroon: Macaroon with Authority,
-        identifier: Identifier): F[Macaroon with Authority] =
+        macaroon: Macaroon,
+        identifier: Identifier): F[Macaroon] =
       addCaveatHelper(macaroon, identifier, None, None)
 
     def addThirdPartyCaveat(
-        macaroon: Macaroon with Authority,
+        macaroon: Macaroon,
         key: MacSigningKey[HmacAlgorithm],
         identifier: Identifier,
-        maybeLocation: Option[Location]): F[Macaroon with Authority] =
+        maybeLocation: Option[Location]): F[Macaroon] =
       for {
         k <- buildEncryptionKey(macaroon.tag.value)
         t = PlainText(key.toJavaKey.getEncoded)
@@ -159,7 +153,7 @@ object MacaroonService {
       } yield key
 
     def verify(
-        macaroon: Macaroon with Authority,
+        macaroon: Macaroon,
         key: MacSigningKey[HmacAlgorithm],
         verifier: Verifier,
         macaroons: Set[Macaroon]): F[Boolean] = {
