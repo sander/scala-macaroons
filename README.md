@@ -58,21 +58,16 @@ Now we can mint a new macaroon:
 val id       = Identifier.from("photo123")
 // id: Identifier = ByteVector(8 bytes, 0x70686f746f313233)
 val key      = HMACSHA256.generateKey[IO].unsafeRunSync()
-// key: MacSigningKey[HMACSHA256] = javax.crypto.spec.SecretKeySpec@fa77c966
+// key: MacSigningKey[HMACSHA256] = javax.crypto.spec.SecretKeySpec@588250e
 val macaroon = macaroons.service.mint(id)(key).unsafeRunSync()
-// macaroon: Macaroon = Macaroon(
-//   maybeLocation = None,
-//   id = ByteVector(8 bytes, 0x70686f746f313233),
-//   caveats = Vector(),
-//   tag = ByteVector(32 bytes, 0x6f8e443bcc4c6d3225b72995a8288c1e3ea7cdb296261e260728f01b1ef44f79)
-// )
+// macaroon: Macaroon = Macaroon(None,ByteVector(8 bytes, 0x70686f746f313233),Vector(),ByteVector(32 bytes, 0x7f9273e144fb94ced8c6f5e5cd1f65e273eca6db44dc395a249daa8049318fe0))
 ```
 
 We can serialize it to transfer it to the client:
 
 ```scala
 macaroonV2.encode(macaroon).require.toBase64
-// res0: String = "AgIIcGhvdG8xMjMAAAYgb45EO8xMbTIltymVqCiMHj6nzbKWJh4mByjwGx70T3k="
+// res0: String = "AgIIcGhvdG8xMjMAAAYgf5Jz4UT7lM7YxvXlzR9l4nPspttE3DlaJJ2qgEkxj+A="
 ```
 
 Now, when the client would get back to us with this macaroon, we could verify it:
@@ -100,23 +95,7 @@ And add these extra layers to the macaroon:
 
 ```scala
 val macaroon2 = transformation.runS(macaroon).unsafeRunSync()
-// macaroon2: Macaroon = Macaroon(
-//   maybeLocation = None,
-//   id = ByteVector(8 bytes, 0x70686f746f313233),
-//   caveats = Vector(
-//     Caveat(
-//       maybeLocation = None,
-//       identifier = ByteVector(17 bytes, 0x64617465203c20323032312d30342d3138),
-//       maybeChallenge = None
-//     ),
-//     Caveat(
-//       maybeLocation = None,
-//       identifier = ByteVector(14 bytes, 0x75736572203d2077696c6c656b65),
-//       maybeChallenge = None
-//     )
-//   ),
-//   tag = ByteVector(32 bytes, 0xafd90e314a97c37e988835c464b51c486f82195adb3a235b99319dcb4376e860)
-// )
+// macaroon2: Macaroon = Macaroon(None,ByteVector(8 bytes, 0x70686f746f313233),Vector(Caveat{date < 2021-04-18}, Caveat{user = willeke}),ByteVector(32 bytes, 0x7837ec50b517ef3e8ae12948721cde0579ef863eaa5c99fb6042f4c27a613f53))
 ```
 
 Whenever a user makes a request with this macaroon, we can authorize the request by verifying the macaroon to a set of true predicates:
@@ -160,25 +139,12 @@ At the photo service, we mint a new macaroon and confine access to an authentica
 
 ```scala
 val rootKey = HMACSHA256.generateKey[IO].unsafeRunSync()
-// rootKey: MacSigningKey[HMACSHA256] = javax.crypto.spec.SecretKeySpec@fa77c81c
+// rootKey: MacSigningKey[HMACSHA256] = javax.crypto.spec.SecretKeySpec@5882283
 val (macaroon, caveatId) =
   (macaroons.service.mint(Identifier.from("photo124"))(rootKey) >>=
     macaroons.caveats.confine(authentication, userIsWilleke).run)
     .unsafeRunSync()
-// macaroon: Macaroon = Macaroon(
-//   maybeLocation = None,
-//   id = ByteVector(8 bytes, 0x70686f746f313234),
-//   caveats = Vector(
-//     Caveat(
-//       maybeLocation = Some(value = https://authentication.example/),
-//       identifier = ByteVector(12 bytes, 0x646973636861726765323334),
-//       maybeChallenge = Some(
-//         value = ByteVector(72 bytes, 0x91c362b136ee7c87baa02c1fa9bf77deb15180206973f53ab61a91343e730a676028d610e77b0b86c2000425ba711fa367e20f1c28bce8aea3d12009003fbd42714103cb88a69583)
-//       )
-//     )
-//   ),
-//   tag = ByteVector(32 bytes, 0xd83ee662f501d67c200ae854fb5c9fcceb7ec60b5b82dd14e2beb3c61b48ead9)
-// )
+// macaroon: Macaroon = Macaroon(None,ByteVector(8 bytes, 0x70686f746f313234),Vector(Caveat{https://authentication.example/,discharge234,ByteVector(72 bytes, 0xb0649b7edca9b09edad8523f29a64d1431163206edc970d5fe37e91df29bd41b30efec921f07369c0dedf8d94add361611d9c61007c888ef3c4b4881abfe77f7df083950b00b3697)}),ByteVector(32 bytes, 0x518e539dfe88489acd966141bbb74b4b0d364b3e98ec267a59941127bbc35503))
 // caveatId: Identifier = ByteVector(12 bytes, 0x646973636861726765323334)
 ```
 
@@ -189,24 +155,14 @@ val discharge =
   (caveatKey.get >>=
     macaroons.service.mint(caveatId, authentication.maybeLocation))
     .unsafeRunSync()
-// discharge: Macaroon = Macaroon(
-//   maybeLocation = Some(value = https://authentication.example/),
-//   id = ByteVector(12 bytes, 0x646973636861726765323334),
-//   caveats = Vector(),
-//   tag = ByteVector(32 bytes, 0xe297c4ad1ec32698f9288d2ffef81be17fb21f81a892f58858c006953ed81eb7)
-// )
+// discharge: Macaroon = Macaroon(Some(https://authentication.example/),ByteVector(12 bytes, 0x646973636861726765323334),Vector(),ByteVector(32 bytes, 0x4493dee15a9ee9bfdd64d96e253dd38e8e5b4064c7e8cc67d770184150bb9e7c))
 ```
 
 When making a request to the photo service, she binds the discharge macaroon to the original one:
 
 ```scala
 val bound = macaroons.service.bind(macaroon, discharge).unsafeRunSync()
-// bound: Macaroon = Macaroon(
-//   maybeLocation = Some(value = https://authentication.example/),
-//   id = ByteVector(12 bytes, 0x646973636861726765323334),
-//   caveats = Vector(),
-//   tag = ByteVector(32 bytes, 0x07f7ad9739af3b9caa65dddfe00ca4606c96aefa5ac6aeb33da8744479de3d74)
-// )
+// bound: Macaroon = Macaroon(Some(https://authentication.example/),ByteVector(12 bytes, 0x646973636861726765323334),Vector(),ByteVector(32 bytes, 0x048896f694fdb8bb9bc8eb7db8d7afa39b7500677d0d11c5b7d5f4d3203dd4d9))
 ```
 
 And the photo service can verify this pair of macaroons:
