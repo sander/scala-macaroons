@@ -2,8 +2,8 @@ package nl.sanderdijkhuis.macaroons.modules
 
 import nl.sanderdijkhuis.macaroons.cryptography._
 import nl.sanderdijkhuis.macaroons.services._
-
 import cats._
+import cats.data.Kleisli
 import cats.effect._
 import tsec.cipher.symmetric.bouncy._
 import tsec.cipher.symmetric._
@@ -28,7 +28,8 @@ object Macaroons {
       XChaCha20Poly1305.nonceSize)
     Macaroons[F](
       macaroonService,
-      CaveatService.make(macaroonService, S.generateKey))
+      CaveatService.make(macaroonService, S.generateKey),
+      AssertionService.make(macaroonService))
   }
 
   def make[F[_]: Sync]()(implicit
@@ -48,4 +49,5 @@ object Macaroons {
 
 final case class Macaroons[F[_]] private (
     service: MacaroonService[F, Macaroons.RootKey],
-    caveats: CaveatService.StatefulCaveatService[F, Macaroons.RootKey])
+    caveats: CaveatService.StatefulCaveatService[F, Macaroons.RootKey],
+    assertions: AssertionService[Kleisli[F, Macaroons.RootKey, *]])

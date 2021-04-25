@@ -28,9 +28,8 @@ import scala.util.chaining._
 trait MacaroonService[F[_], RootKey] {
 
   @Risk("Not enforcing properties of RootKey allows for generating weak keys.")
-  def mint(
+  private[services] def mint(
       identifier: Identifier,
-//      rootKey: RootKey,
       maybeLocation: Option[Location] = None)(rootKey: RootKey): F[Macaroon]
 
   def bind(authorizing: Macaroon, discharging: Macaroon): F[Macaroon]
@@ -45,11 +44,10 @@ trait MacaroonService[F[_], RootKey] {
       identifier: Identifier,
       maybeLocation: Option[Location]): F[Macaroon]
 
-  def verify(
+  private[services] def verify(
       macaroon: Macaroon,
-      key: RootKey,
       verifier: Verifier = Set.empty,
-      Ms: Set[Macaroon] = Set.empty): F[Boolean]
+      Ms: Set[Macaroon] = Set.empty)(rootKey: RootKey): F[Boolean]
 }
 
 object MacaroonService {
@@ -150,9 +148,9 @@ object MacaroonService {
 
     def verify(
         macaroon: Macaroon,
-        key: MacSigningKey[HmacAlgorithm],
         verifier: Verifier,
-        macaroons: Set[Macaroon]): F[Boolean] = {
+        macaroons: Set[Macaroon])(
+        key: MacSigningKey[HmacAlgorithm]): F[Boolean] = {
 
       def helper(
           discharge: Option[Macaroon],

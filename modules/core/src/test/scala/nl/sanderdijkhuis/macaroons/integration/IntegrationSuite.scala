@@ -26,6 +26,7 @@ class IntegrationSuite extends FunSuite {
   test("example from paper") {
     import macaroons.caveats._
     import macaroons.service._
+    import macaroons.assertions._
 
     val txAtTs = attenuate(chunkInRange) *> attenuate(opInReadWrite) *>
       attenuate(timeBefore3pm)
@@ -35,12 +36,12 @@ class IntegrationSuite extends FunSuite {
 
     val program: StateT[F, TestState, Boolean] = for {
       mk         <- key
-      mTS        <- mint(mId, targetServiceLocation.some)(mk) >>= txAtTs.runS
+      mTS        <- mint(mId, targetServiceLocation.some).run(mk) >>= txAtTs.runS
       (mFS, cid) <- txAtFs.run(mTS)
       dk         <- dischargeKey
-      mAS        <- mint(cid, asEndpoint.maybeLocation)(dk) >>= txAtAs.runS
+      mAS        <- mint(cid, asEndpoint.maybeLocation).run(dk) >>= txAtAs.runS
       mASs       <- bind(mFS, mAS)
-      result     <- verify(mFS, mk, tsVerifier, Set(mASs))
+      result     <- verify(mFS, tsVerifier, Set(mASs)).run(mk)
     } yield result
     assert(program.runA(TestState()).contains(true))
   }
