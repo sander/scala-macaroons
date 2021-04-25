@@ -58,13 +58,13 @@ Now we can mint a new macaroon:
 val id       = Identifier.from("photo123")
 // id: Identifier = ByteVector(8 bytes, 0x70686f746f313233)
 val key      = HMACSHA256.generateKey[IO].unsafeRunSync()
-// key: MacSigningKey[HMACSHA256] = javax.crypto.spec.SecretKeySpec@58866cc
+// key: MacSigningKey[HMACSHA256] = javax.crypto.spec.SecretKeySpec@fa77c966
 val macaroon = macaroons.service.mint(id)(key).unsafeRunSync()
 // macaroon: Macaroon = Macaroon(
 //   maybeLocation = None,
 //   id = ByteVector(8 bytes, 0x70686f746f313233),
 //   caveats = Vector(),
-//   tag = ByteVector(32 bytes, 0xcaeff6309c7a58162bd851927214c780247d5a138183e9b2a058f76056911baa)
+//   tag = ByteVector(32 bytes, 0x6f8e443bcc4c6d3225b72995a8288c1e3ea7cdb296261e260728f01b1ef44f79)
 // )
 ```
 
@@ -72,7 +72,7 @@ We can serialize it to transfer it to the client:
 
 ```scala
 macaroonV2.encode(macaroon).require.toBase64
-// res0: String = "AgIIcGhvdG8xMjMAAAYgyu/2MJx6WBYr2FGSchTHgCR9WhOBg+myoFj3YFaRG6o="
+// res0: String = "AgIIcGhvdG8xMjMAAAYgb45EO8xMbTIltymVqCiMHj6nzbKWJh4mByjwGx70T3k="
 ```
 
 Now, when the client would get back to us with this macaroon, we could verify it:
@@ -115,7 +115,7 @@ val macaroon2 = transformation.runS(macaroon).unsafeRunSync()
 //       maybeChallenge = None
 //     )
 //   ),
-//   tag = ByteVector(32 bytes, 0xf4801386d51d33a64e673bd7f79b0c51b218c85fb6000905f4aa11bab2f2b247)
+//   tag = ByteVector(32 bytes, 0xafd90e314a97c37e988835c464b51c486f82195adb3a235b99319dcb4376e860)
 // )
 ```
 
@@ -160,7 +160,7 @@ At the photo service, we mint a new macaroon and confine access to an authentica
 
 ```scala
 val rootKey = HMACSHA256.generateKey[IO].unsafeRunSync()
-// rootKey: MacSigningKey[HMACSHA256] = javax.crypto.spec.SecretKeySpec@588120e
+// rootKey: MacSigningKey[HMACSHA256] = javax.crypto.spec.SecretKeySpec@fa77c81c
 val (macaroon, caveatId) =
   (macaroons.service.mint(Identifier.from("photo124"))(rootKey) >>=
     macaroons.caveats.confine(authentication, userIsWilleke).run)
@@ -173,11 +173,11 @@ val (macaroon, caveatId) =
 //       maybeLocation = Some(value = https://authentication.example/),
 //       identifier = ByteVector(12 bytes, 0x646973636861726765323334),
 //       maybeChallenge = Some(
-//         value = ByteVector(72 bytes, 0x1d8db69f4f69266d52c4cbb8391ac4d687f970ced3e86223f9776ca423eb840c301c4b2534707cfcee54a237dbc47fd711756fbc8d6fb86d0270cad65eb923897cfe68aa41f8e14b)
+//         value = ByteVector(72 bytes, 0x91c362b136ee7c87baa02c1fa9bf77deb15180206973f53ab61a91343e730a676028d610e77b0b86c2000425ba711fa367e20f1c28bce8aea3d12009003fbd42714103cb88a69583)
 //       )
 //     )
 //   ),
-//   tag = ByteVector(32 bytes, 0xa716fa9dd10f885c28d4a59456862ef52ff504cfb067e4d0671a9bf0d9d0f01f)
+//   tag = ByteVector(32 bytes, 0xd83ee662f501d67c200ae854fb5c9fcceb7ec60b5b82dd14e2beb3c61b48ead9)
 // )
 // caveatId: Identifier = ByteVector(12 bytes, 0x646973636861726765323334)
 ```
@@ -193,11 +193,11 @@ val discharge =
 //   maybeLocation = Some(value = https://authentication.example/),
 //   id = ByteVector(12 bytes, 0x646973636861726765323334),
 //   caveats = Vector(),
-//   tag = ByteVector(32 bytes, 0x81898d85744dd8b64e520a28c78caf8e332cf8c1fd38b9a30654429057a54b58)
+//   tag = ByteVector(32 bytes, 0xe297c4ad1ec32698f9288d2ffef81be17fb21f81a892f58858c006953ed81eb7)
 // )
 ```
 
-Before making a request to the photo service, she binds the discharge macaroon to the original one, altering its authentication tag:
+When making a request to the photo service, she binds the discharge macaroon to the original one:
 
 ```scala
 val bound = macaroons.service.bind(macaroon, discharge).unsafeRunSync()
@@ -205,7 +205,7 @@ val bound = macaroons.service.bind(macaroon, discharge).unsafeRunSync()
 //   maybeLocation = Some(value = https://authentication.example/),
 //   id = ByteVector(12 bytes, 0x646973636861726765323334),
 //   caveats = Vector(),
-//   tag = ByteVector(32 bytes, 0xff4773cc77054aff219af3c1cbae1c42b5bf3af5510e139d5526bf29ddbd7285)
+//   tag = ByteVector(32 bytes, 0x07f7ad9739af3b9caa65dddfe00ca4606c96aefa5ac6aeb33da8744479de3d74)
 // )
 ```
 
