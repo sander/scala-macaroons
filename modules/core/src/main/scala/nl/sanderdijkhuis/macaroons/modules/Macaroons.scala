@@ -48,4 +48,4 @@ object Macaroons {
 
 final case class Macaroons[F[_]] private (
     service: MacaroonService[F, Macaroons.RootKey],
-    caveats: CaveatService.StatefulCaveatService[F, HMACSHA256])
+    caveats: CaveatService.StatefulCaveatService[F, Macaroons.RootKey])

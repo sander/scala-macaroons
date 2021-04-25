@@ -5,7 +5,6 @@ import nl.sanderdijkhuis.macaroons.domain._
 import cats._
 import cats.data._
 import cats.implicits._
-import tsec.mac.jca._
 
 trait CaveatService[F[_], Context] {
 
@@ -16,23 +15,20 @@ trait CaveatService[F[_], Context] {
 
 object CaveatService {
 
-  type StatefulCaveatService[F[_], HmacAlgorithm] =
-    CaveatService[Transformation[F, *], Context[F, MacSigningKey[
-      HmacAlgorithm]]]
+  type StatefulCaveatService[F[_], RootKey] =
+    CaveatService[Transformation[F, *], Context[F, RootKey]]
 
-  def make[F[_]: Monad, HmacAlgorithm, AuthCipher](
-      macaroonService: MacaroonService[F, MacSigningKey[HmacAlgorithm]],
-      generateKey: F[MacSigningKey[HmacAlgorithm]])
-      : StatefulCaveatService[F, HmacAlgorithm] =
-    new CaveatService[Transformation[F, *], Context[F, MacSigningKey[
-      HmacAlgorithm]]] {
+  def make[F[_]: Monad, RootKey, AuthCipher](
+      macaroonService: MacaroonService[F, RootKey],
+      generateKey: F[RootKey]): StatefulCaveatService[F, RootKey] =
+    new CaveatService[Transformation[F, *], Context[F, RootKey]] {
 
       override def attenuate(predicate: Predicate): Transformation[F, Unit] =
         StateT(macaroonService.addFirstPartyCaveat(_, predicate.identifier).map(
           (_, ())))
 
       override def confine(
-          context: Context[F, MacSigningKey[HmacAlgorithm]],
+          context: Context[F, RootKey],
           predicate: Predicate): Transformation[F, Identifier] =
         StateT(m =>
           for {
