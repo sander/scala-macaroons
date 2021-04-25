@@ -15,7 +15,6 @@ import eu.timepit.refined.collection._
 import eu.timepit.refined.refineV
 import scodec.bits._
 import tsec.cipher.symmetric._
-import tsec.cipher.symmetric.bouncy._
 import tsec.hashing._
 import tsec.hashing.jca._
 import tsec.mac._
@@ -133,8 +132,7 @@ object MacaroonService {
         t = PlainText(key.toJavaKey.getEncoded)
         iv <- initializationVector
         e  <- encryptor.encrypt(t, k, iv)
-        c =
-          Challenge(refineV[NonEmpty].unsafeFrom(ByteVector(e.toConcatenated)))
+        c = Challenge(unsafeNonEmptyByteVector(ByteVector(e.toConcatenated)))
         m <- addCaveatHelper(macaroon, identifier, Some(c), maybeLocation)
       } yield m
 
@@ -185,9 +183,6 @@ object MacaroonService {
       helper(None, key)
     }
   }
-
-  type RootKey              = MacSigningKey[HMACSHA256]
-  type InitializationVector = Iv[XChaCha20Poly1305]
 
   def make[F[
       _]: Monad, E >: CryptographyError, HashAlgorithm, HmacAlgorithm, AuthCipher, AuthCipherSecretKey[

@@ -11,7 +11,6 @@ import munit.FunSuite
 import nl.sanderdijkhuis.macaroons.cryptography._
 import nl.sanderdijkhuis.macaroons.domain._
 import nl.sanderdijkhuis.macaroons.modules.Macaroons
-import nl.sanderdijkhuis.macaroons.services.MacaroonService.RootKey
 import tsec.cipher.symmetric.{Encryptor, Iv}
 import tsec.cipher.symmetric.bouncy.{BouncySecretKey, XChaCha20Poly1305}
 import tsec.keygen.symmetric.SymmetricKeyGen
@@ -78,13 +77,14 @@ class IntegrationSuite extends FunSuite {
       timeBefore9am,
       ipMatch)
 
-    case class TestState(dischargeKey: Option[RootKey] = None)
+    case class TestState(dischargeKey: Option[MacSigningKey[HMACSHA256]] = None)
 
-    val asEndpoint = Context[StateT[F, TestState, *], RootKey](
-      Some(authenticationServiceLocation),
-      (v, w) =>
-        StateT((s: TestState) =>
-          (s.copy(dischargeKey = Some(v)), Identifier.from("dm")).asRight))
+    val asEndpoint =
+      Context[StateT[F, TestState, *], MacSigningKey[HMACSHA256]](
+        Some(authenticationServiceLocation),
+        (v, w) =>
+          StateT((s: TestState) =>
+            (s.copy(dischargeKey = Some(v)), Identifier.from("dm")).asRight))
 
     def key =
       StateT.liftF[F, TestState, MacSigningKey[HMACSHA256]](
