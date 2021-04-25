@@ -27,14 +27,18 @@ import cats.implicits._
 import eu.timepit.refined.auto._
 ```
 
+Import cryptography functions:
+
+```scala
+import tsec.mac.jca._
+```
+
 Import macaroons dependencies:
 
 ```scala
 import nl.sanderdijkhuis.macaroons.codecs._
-import nl.sanderdijkhuis.macaroons.effects._
 import nl.sanderdijkhuis.macaroons.domain._
 import nl.sanderdijkhuis.macaroons.modules._
-import nl.sanderdijkhuis.macaroons.repositories._
 ```
 
 ### Baking macaroons
@@ -44,20 +48,22 @@ Say we run a photo service and we want to use macaroons to manage authorizations
 First, we specify how to generate locally unique identifiers, how to protect root keys, and how to make and verify assertions:
 
 ```scala
-val identifiers: Identifiers[IO] = Identifiers.secureRandom
-val rootKeys: RootKeys[IO]       = RootKeys.makeInMemory().unsafeRunSync()
-val assertions: Assertions[IO]   = Assertions.make(rootKeys.repository)
+val macaroons: Macaroons[IO] = Macaroons.make()
 ```
 
 Now we can mint a new macaroon:
 
 ```scala
-val macaroon = assertions.service.assert().unsafeRunSync()
-// macaroon: Macaroon with Authority = Macaroon(
+val id       = Identifier.from("photo123")
+// id: Identifier = ByteVector(8 bytes, 0x70686f746f313233)
+val key      = HMACSHA256.generateKey[IO].unsafeRunSync()
+// key: MacSigningKey[HMACSHA256] = javax.crypto.spec.SecretKeySpec@fa77c70a
+val macaroon = macaroons.service.mint(id, key).unsafeRunSync()
+// macaroon: Macaroon = Macaroon(
 //   maybeLocation = None,
-//   id = ByteVector(16 bytes, 0x0b9ddf03534a05975a6520aab2523ac2),
+//   id = ByteVector(8 bytes, 0x70686f746f313233),
 //   caveats = Vector(),
-//   tag = ByteVector(32 bytes, 0x2906520c8a6c9210af345b2a8081a0a7e641bf4fb37747ddee26475dabfee136)
+//   tag = ByteVector(32 bytes, 0x726c7cbdce1e9bb729fa5b108a3e78f6ec82a4b8a528edbfada09ea02f6c62ac)
 // )
 ```
 
@@ -65,13 +71,13 @@ We can serialize it to transfer it to the client:
 
 ```scala
 macaroonV2.encode(macaroon).require.toBase64
-// res0: String = "AgIQC53fA1NKBZdaZSCqslI6wgAABiApBlIMimySEK80WyqAgaCn5kG/T7N3R93uJkddq/7hNg=="
+// res0: String = "AgIIcGhvdG8xMjMAAAYgcmx8vc4em7cp+lsQij549uyCpLilKO2/raCeoC9sYqw="
 ```
 
 Now, when the client would get back to us with this macaroon, we could verify it:
 
 ```scala
-assertions.service.verify(macaroon).unsafeRunSync()
+macaroons.service.verify(macaroon, key).unsafeRunSync()
 // res1: Boolean = true
 ```
 
@@ -84,18 +90,18 @@ val dateBeforeApril18 = Predicate.from("date < 2021-04-18")
 val userIsWilleke     = Predicate.from("user = willeke")
 
 val transformation = {
-  import assertions.macaroons.caveats._
+  import macaroons.caveats._
   attenuate(dateBeforeApril18) *> attenuate(userIsWilleke)
 }
 ```
 
-And bake a macaroon with this transformation:
+And add these extra layers to the macaroon:
 
 ```scala
 val macaroon2 = transformation.runS(macaroon).unsafeRunSync()
-// macaroon2: Macaroon with Authority = Macaroon(
+// macaroon2: Macaroon = Macaroon(
 //   maybeLocation = None,
-//   id = ByteVector(16 bytes, 0x0b9ddf03534a05975a6520aab2523ac2),
+//   id = ByteVector(8 bytes, 0x70686f746f313233),
 //   caveats = Vector(
 //     Caveat(
 //       maybeLocation = None,
@@ -108,16 +114,15 @@ val macaroon2 = transformation.runS(macaroon).unsafeRunSync()
 //       maybeChallenge = None
 //     )
 //   ),
-//   tag = ByteVector(32 bytes, 0x33278239bb69e62f08d6c42dd6b4115801f186d48178c10c850fcaebf2e5a07f)
+//   tag = ByteVector(32 bytes, 0x9bf92ca731b7051f20a97aba96bcf4a5f584781642c9ac4860f859488db3d060)
 // )
 ```
 
 Whenever a user makes a request with this macaroon, we can authorize the request by verifying the macaroon to a set of true predicates:
 
 ```scala
-val someOtherPredicate = Predicate.from("ip = 192.168.0.1")
 val predicatesForThisRequest =
-  Set(dateBeforeApril18, userIsWilleke, someOtherPredicate)
+  Set(dateBeforeApril18, userIsWilleke, Predicate.from("ip = 192.168.0.1"))
 ```
 
 Note that although this particular example uses a set, we could have used any function `Predicate => Boolean`. One particularly useful type of function matches the prefix of the predicate (e.g. `date < `), parses the rest of the predicate and verifies this with data from the request context. 
@@ -125,7 +130,8 @@ Note that although this particular example uses a set, we could have used any fu
 To verify the macaroon, again:
 
 ```scala
-assertions.service.verify(macaroon2, predicatesForThisRequest).unsafeRunSync()
+macaroons.service.verify(macaroon2, key, predicatesForThisRequest)
+  .unsafeRunSync()
 // res2: Boolean = true
 ```
 

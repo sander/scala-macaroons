@@ -2,8 +2,6 @@ package nl.sanderdijkhuis.macaroons
 
 import nl.sanderdijkhuis.macaroons.domain._
 
-import cats.effect._
-import cats.implicits._
 import eu.timepit.refined.collection._
 import eu.timepit.refined.refineV
 import eu.timepit.refined.types.string._
@@ -63,19 +61,6 @@ object codecs {
   private def optionalField[A](tagInt: Int, codec: Codec[A]): Codec[Option[A]] =
     "optional" |
       optional(recover(tag(tagInt)), variableSizeBytesLong(vlong, codec))
-
-  object MacaroonCodec {
-
-    def encode[F[_]: Sync](macaroon: Macaroon): F[ByteVector] =
-      Sync[F].fromTry(macaroonV2.encode(macaroon).toTry).map(_.bytes)
-
-    def decode[F[_]: Sync](byteVector: ByteVector): F[Macaroon] =
-      Sync[F].delay(macaroonV2.decodeValue(byteVector.bits).require)
-
-    def decodeAuthorizing[F[_]: Sync](
-        byteVector: ByteVector): F[Macaroon with Authority] =
-      decode(byteVector).map(_.asInstanceOf[Macaroon with Authority])
-  }
 
   private[macaroons] object util {
 

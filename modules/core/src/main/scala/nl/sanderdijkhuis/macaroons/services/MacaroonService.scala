@@ -48,8 +48,8 @@ trait MacaroonService[F[_], RootKey] {
   def verify(
       macaroon: Macaroon,
       key: RootKey,
-      verifier: Verifier,
-      Ms: Set[Macaroon]): F[Boolean]
+      verifier: Verifier = _ => false,
+      Ms: Set[Macaroon] = Set.empty): F[Boolean]
 }
 
 object MacaroonService {
