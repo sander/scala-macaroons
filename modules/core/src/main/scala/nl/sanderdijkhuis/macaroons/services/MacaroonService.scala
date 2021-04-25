@@ -26,7 +26,7 @@ import scala.util.chaining._
 
 /** Operations for generating and manipulating [[Macaroon]]s. */
 @finalAlg @autoFunctorK
-trait MacaroonService[F[_], RootKey, InitializationVector] {
+trait MacaroonService[F[_], RootKey] {
 
   @Risk("Not enforcing properties of RootKey allows for generating weak keys.")
   def mint(
@@ -42,11 +42,9 @@ trait MacaroonService[F[_], RootKey, InitializationVector] {
       macaroon: Macaroon with Authority,
       identifier: Identifier): F[Macaroon with Authority]
 
-  @Risk("By letting the user specify the IV, we enable accidental re-use.")
   def addThirdPartyCaveat(
       macaroon: Macaroon with Authority,
       key: RootKey,
-      initializationVector: InitializationVector,
       identifier: Identifier,
       maybeLocation: Option[Location]): F[Macaroon with Authority]
 
@@ -67,8 +65,9 @@ object MacaroonService {
       nonceSize: Int)(implicit
       mac: MessageAuth[F, HmacAlgorithm, MacSigningKey],
       hasher: CryptoHasher[Id, HashAlgorithm],
-      encryptor: Encryptor[F, AuthCipher, AuthCipherSecretKey])
-      extends MacaroonService[F, MacSigningKey[HmacAlgorithm], Iv[AuthCipher]] {
+      encryptor: Encryptor[F, AuthCipher, AuthCipherSecretKey],
+      initializationVector: F[Iv[AuthCipher]])
+      extends MacaroonService[F, MacSigningKey[HmacAlgorithm]] {
 
     private def unsafeNonEmptyByteVector(
         byteVector: ByteVector): NonEmptyByteVector =
@@ -133,13 +132,13 @@ object MacaroonService {
     def addThirdPartyCaveat(
         macaroon: Macaroon with Authority,
         key: MacSigningKey[HmacAlgorithm],
-        initializationVector: Iv[AuthCipher],
         identifier: Identifier,
         maybeLocation: Option[Location]): F[Macaroon with Authority] =
       for {
         k <- buildEncryptionKey(macaroon.tag.value)
         t = PlainText(key.toJavaKey.getEncoded)
-        e <- encryptor.encrypt(t, k, initializationVector)
+        iv <- initializationVector
+        e  <- encryptor.encrypt(t, k, iv)
         c =
           Challenge(refineV[NonEmpty].unsafeFrom(ByteVector(e.toConcatenated)))
         m <- addCaveatHelper(macaroon, identifier, Some(c), maybeLocation)
@@ -204,8 +203,9 @@ object MacaroonService {
       nonceSize: Int)(implicit
       mac: MessageAuth[F, HmacAlgorithm, MacSigningKey],
       hasher: CryptoHasher[Id, HashAlgorithm],
-      encryptor: Encryptor[F, AuthCipher, AuthCipherSecretKey])
-      : MacaroonService[F, MacSigningKey[HmacAlgorithm], Iv[AuthCipher]] =
+      encryptor: Encryptor[F, AuthCipher, AuthCipherSecretKey],
+      initializationVector: F[Iv[AuthCipher]])
+      : MacaroonService[F, MacSigningKey[HmacAlgorithm]] =
     new TsecLive[
       F,
       HashAlgorithm,

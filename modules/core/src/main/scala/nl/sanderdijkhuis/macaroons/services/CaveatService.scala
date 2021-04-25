@@ -5,7 +5,6 @@ import nl.sanderdijkhuis.macaroons.domain._
 import cats._
 import cats.data._
 import cats.implicits._
-import tsec.cipher.symmetric._
 import tsec.mac.jca._
 
 trait CaveatService[F[_], Context] {
@@ -22,10 +21,9 @@ object CaveatService {
       HmacAlgorithm]]]
 
   def make[F[_]: Monad, HmacAlgorithm, AuthCipher](
-      macaroonService: MacaroonService[F, MacSigningKey[HmacAlgorithm], Iv[
-        AuthCipher]],
-      generateKey: F[MacSigningKey[HmacAlgorithm]],
-      generateIv: F[Iv[AuthCipher]]): StatefulCaveatService[F, HmacAlgorithm] =
+      macaroonService: MacaroonService[F, MacSigningKey[HmacAlgorithm]],
+      generateKey: F[MacSigningKey[HmacAlgorithm]])
+      : StatefulCaveatService[F, HmacAlgorithm] =
     new CaveatService[Transformation[F, *], Context[F, MacSigningKey[
       HmacAlgorithm]]] {
 
@@ -40,9 +38,8 @@ object CaveatService {
           for {
             rootKey <- generateKey
             cId     <- context.prepare(rootKey, predicate)
-            iv      <- generateIv
             m <- macaroonService
-              .addThirdPartyCaveat(m, rootKey, iv, cId, context.maybeLocation)
+              .addThirdPartyCaveat(m, rootKey, cId, context.maybeLocation)
           } yield (m, cId))
     }
 }

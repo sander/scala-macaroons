@@ -12,7 +12,7 @@ import nl.sanderdijkhuis.macaroons.cryptography._
 import nl.sanderdijkhuis.macaroons.domain._
 import nl.sanderdijkhuis.macaroons.modules.Macaroons
 import nl.sanderdijkhuis.macaroons.services.MacaroonService.RootKey
-import tsec.cipher.symmetric.Encryptor
+import tsec.cipher.symmetric.{Encryptor, Iv}
 import tsec.cipher.symmetric.bouncy.{BouncySecretKey, XChaCha20Poly1305}
 import tsec.keygen.symmetric.SymmetricKeyGen
 import tsec.mac.jca.{HMACSHA256, MacSigningKey}
@@ -27,14 +27,16 @@ class IntegrationSuite extends FunSuite {
   test("example from paper") {
     import macaroons.caveats._
     import macaroons.service._
+
     val txAtTs = attenuate(chunkInRange) *> attenuate(opInReadWrite) *>
       attenuate(timeBefore3pm)
     val txAtFs = confine(asEndpoint, userIsBob) <* attenuate(chunkIs235) <*
       attenuate(operationIsRead)
     val txAtAs = attenuate(timeBefore9am) *> attenuate(ipMatch)
+
     val program: StateT[F, TestState, Boolean] = for {
       mk         <- key
-      mTS        <- mint(mId, mk, Some(targetServiceLocation)) >>= txAtTs.runS
+      mTS        <- mint(mId, mk, targetServiceLocation.some) >>= txAtTs.runS
       (mFS, cid) <- txAtFs.run(mTS)
       dk         <- dischargeKey
       mAS        <- mint(cid, dk, asEndpoint.maybeLocation) >>= txAtAs.runS
@@ -102,7 +104,9 @@ class IntegrationSuite extends FunSuite {
       implicit val e: Encryptor[G, XChaCha20Poly1305, BouncySecretKey] = Derive
         .functorK[Encryptor[*[_], XChaCha20Poly1305, BouncySecretKey]]
         .mapK[F, G](encryptor[F, E])(functorK)
-      Macaroons.make[G, E](StateT.liftF(unsafeGenerateIv))
+      implicit val iv: G[Iv[XChaCha20Poly1305]] = StateT
+        .liftF[F, TestState, Iv[XChaCha20Poly1305]](unsafeGenerateIv)
+      Macaroons.make[G, E]
     }
   }
 }
