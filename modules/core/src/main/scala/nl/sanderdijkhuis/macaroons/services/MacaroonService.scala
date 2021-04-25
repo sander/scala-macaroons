@@ -36,11 +36,11 @@ trait MacaroonService[F[_], RootKey] {
 
   def bind(authorizing: Macaroon, discharging: Macaroon): F[Macaroon]
 
-  def addFirstPartyCaveat(
+  private[services] def addFirstPartyCaveat(
       macaroon: Macaroon,
       identifier: Identifier): F[Macaroon]
 
-  def addThirdPartyCaveat(
+  private[services] def addThirdPartyCaveat(
       macaroon: Macaroon,
       key: RootKey,
       identifier: Identifier,
