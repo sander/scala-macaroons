@@ -35,10 +35,10 @@ class IntegrationSuite extends FunSuite {
 
     val program: StateT[F, TestState, Boolean] = for {
       mk         <- key
-      mTS        <- mint(mId, mk, targetServiceLocation.some) >>= txAtTs.runS
+      mTS        <- mint(mId, targetServiceLocation.some)(mk) >>= txAtTs.runS
       (mFS, cid) <- txAtFs.run(mTS)
       dk         <- dischargeKey
-      mAS        <- mint(cid, dk, asEndpoint.maybeLocation) >>= txAtAs.runS
+      mAS        <- mint(cid, asEndpoint.maybeLocation)(dk) >>= txAtAs.runS
       mASs       <- bind(mFS, mAS)
       result     <- verify(mFS, mk, tsVerifier, Set(mASs))
     } yield result

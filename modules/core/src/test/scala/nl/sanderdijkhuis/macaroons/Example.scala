@@ -4,8 +4,10 @@ package nl.sanderdijkhuis.macaroons
 object Example {
 
   import cats.effect._
+  import cats.effect.concurrent._
   import cats.implicits._
   import eu.timepit.refined.auto._
+
   import tsec.mac.jca._
 
   import nl.sanderdijkhuis.macaroons.codecs._
@@ -16,7 +18,7 @@ object Example {
 
   val id       = Identifier.from("photo123")
   val key      = HMACSHA256.generateKey[IO].unsafeRunSync()
-  val macaroon = macaroons.service.mint(id, key).unsafeRunSync()
+  val macaroon = macaroons.service.mint(id)(key).unsafeRunSync()
 
   macaroonV2.encode(macaroon).require.toBase64
 
@@ -38,5 +40,37 @@ object Example {
   macaroons.service.verify(macaroon2, key, predicatesForThisRequest)
     .unsafeRunSync()
 
-  def main(args: Array[String]): Unit = ()
+//  val contextShift = IO.contextShift()
+  implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
+  val caveatKey   = Deferred[IO, MacSigningKey[HMACSHA256]].unsafeRunSync()
+
+  val authentication = Context(
+    Location("https://authentication.example/").some,
+    (key: MacSigningKey[HMACSHA256], predicate) =>
+      IO(assert(predicate == userIsWilleke)) *> caveatKey.complete(key) *>
+        Identifier.from("discharge234").pure[IO]
+  )
+
+  object Second {
+
+    val rootKey = HMACSHA256.generateKey[IO].unsafeRunSync()
+
+    val (macaroon, caveatId) =
+      (macaroons.service.mint(Identifier.from("photo124"))(rootKey) >>=
+        macaroons.caveats.confine(authentication, userIsWilleke).run)
+        .unsafeRunSync()
+
+    val discharge =
+      (caveatKey.get >>=
+        macaroons.service.mint(caveatId, authentication.maybeLocation))
+        .unsafeRunSync()
+
+    val bound = macaroons.service.bind(macaroon, discharge).unsafeRunSync()
+
+    println(
+      macaroons.service.verify(macaroon, rootKey, Set.empty, Set(bound))
+        .unsafeRunSync())
+  }
+
+  def main(args: Array[String]): Unit = println(Second)
 }

@@ -30,8 +30,8 @@ trait MacaroonService[F[_], RootKey] {
   @Risk("Not enforcing properties of RootKey allows for generating weak keys.")
   def mint(
       identifier: Identifier,
-      rootKey: RootKey,
-      maybeLocation: Option[Location] = None): F[Macaroon]
+//      rootKey: RootKey,
+      maybeLocation: Option[Location] = None)(rootKey: RootKey): F[Macaroon]
 
   def bind(authorizing: Macaroon, discharging: Macaroon): F[Macaroon]
 
@@ -48,7 +48,7 @@ trait MacaroonService[F[_], RootKey] {
   def verify(
       macaroon: Macaroon,
       key: RootKey,
-      verifier: Verifier = _ => false,
+      verifier: Verifier = Set.empty,
       Ms: Set[Macaroon] = Set.empty): F[Boolean]
 }
 
@@ -110,10 +110,8 @@ object MacaroonService {
         .map(tag => macaroon.copy(caveats = caveats, tag = tag))
     }
 
-    def mint(
-        identifier: Identifier,
-        rootKey: MacSigningKey[HmacAlgorithm],
-        maybeLocation: Option[Location]): F[Macaroon] =
+    def mint(identifier: Identifier, maybeLocation: Option[Location])(
+        rootKey: MacSigningKey[HmacAlgorithm]): F[Macaroon] =
       authenticate(identifier.value, rootKey)
         .map(Macaroon(maybeLocation, identifier, Vector.empty, _))
 
